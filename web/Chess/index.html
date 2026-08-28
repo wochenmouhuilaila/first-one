@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>中国象棋 · AI对战+智能聊天（DeepSeek V4 思考模型适配版）</title>
+    <link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<div class="container">
+    <div class="status-bar" id="statusBar">
+        <span id="statusText">请选择执子方</span>
+        <span id="turnBadge" class="badge badge-gray">等待开始</span>
+    </div>
+
+    <div class="panel" id="controlPanel">
+        <label>执子方：</label>
+        <select id="sideSelect">
+            <option value="red">红方（先手）</option>
+            <option value="black">黑方（后手）</option>
+        </select>
+        <button class="btn btn-green" id="btnStart">开始游戏</button>
+        <button class="btn btn-red btn-sm" id="btnRestart">重新开始</button>
+        <button class="btn btn-sm" id="btnToggleApi">⚙ API设置</button>
+        <button class="btn btn-sm" id="btnCheat">🧙 摆棋作弊</button>
+    </div>
+
+    <div class="panel hidden" id="cheatPanel">
+        <label>作弊棋子：</label>
+        <select id="cheatPiece">
+            <option value="R">红车</option>
+            <option value="N">红马</option>
+            <option value="C">红炮</option>
+            <option value="P">红兵</option>
+            <option value="B">红相</option>
+            <option value="A">红仕</option>
+            <option value="r">黑车</option>
+            <option value="n">黑马</option>
+            <option value="c">黑炮</option>
+            <option value="p">黑卒</option>
+            <option value="b">黑象</option>
+            <option value="a">黑士</option>
+        </select>
+        <button class="btn btn-sm btn-green" id="btnCheatDone">完成</button>
+        <span class="hint">仅限你的回合：点击棋盘任意空格放置棋子，不占用走棋回合（帅/将不可添加）</span>
+    </div>
+
+    <div class="panel hidden" id="apiPanel">
+        <div class="api-config-row">
+            <label>Endpoint:</label>
+            <input type="text" id="apiEndpoint" placeholder="https://api.deepseek.com/v1/chat/completions" value="https://api.deepseek.com/v1/chat/completions">
+        </div>
+        <div class="api-config-row">
+            <label>API Key:</label>
+            <input type="password" id="apiKey" placeholder="sk-..." style="width:150px;">
+            <label>Model:</label>
+            <input type="text" id="apiModel" value="deepseek-v4-flash" style="width:130px;">
+        </div>
+        <div class="api-config-row">
+            <label>聊天MaxTokens:</label>
+            <input type="number" id="apiMaxTokens" value="1024" min="64" max="16384" style="width:70px;">
+            <label>走棋MaxTokens:</label>
+            <input type="number" id="apiMoveMaxTokens" value="4096" min="512" max="32768" style="width:90px;">
+            <label>Temperature:</label>
+            <input type="number" id="apiTemperature" value="0.3" min="0" max="2" step="0.1" style="width:60px;">
+        </div>
+        <div class="api-config-row">
+            <label>走棋思考模式：</label>
+            <select id="apiThinkingMode">
+                <option value="off">关闭（推荐，稳定快速）</option>
+                <option value="low">低思考（棋力略强，稍慢）</option>
+                <option value="high">高思考（棋力最强，很慢）</option>
+            </select>
+        </div>
+        <div class="api-config-row">
+            <label>
+                <input type="checkbox" id="apiForceMove"> 强制API走棋（失败时不回退本地）
+            </label>
+            <label>
+                <input type="checkbox" id="apiNumberMode"> 优先编号模式（全量候选兜底策略）
+            </label>
+            <label>
+                <input type="checkbox" id="apiEngineGuard" checked> 引擎护航（AI走法质量把关，防止送子）
+            </label>
+        </div>
+        <div class="api-config-row">
+            <label>聊天系统提示词：</label>
+            <input type="text" id="chatSystemPrompt"
+                   placeholder="例如：你是一位幽默的象棋解说员..."
+                   style="width:240px; font-size:12px;">
+        </div>
+        <div class="api-config-row hint">提示：低/高思考若被判定"思考超限"会自动降回关闭思考并由引擎护航兜底；关闭思考+引擎护航即可获得稳定且较强的棋力。</div>
+        <div class="api-config-row">
+            <button class="btn btn-sm btn-green" id="btnTestApi">测试API连接</button>
+            <button class="btn btn-sm" id="btnSaveApi">保存</button>
+            <button class="btn btn-sm" id="btnCloseApi">关闭</button>
+        </div>
+    </div>
+
+    <canvas id="boardCanvas"></canvas>
+    <div class="log-area" id="logArea"></div>
+
+    <div class="chat-panel">
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-msg system">💬 聊天室已开启，配置API后可与AI对话（AI知晓当前棋局）</div>
+        </div>
+        <div class="chat-input-row">
+            <input type="text" id="chatInput" placeholder="输入消息..." maxlength="500">
+            <button id="chatSendBtn">发送</button>
+        </div>
+    </div>
+</div>
+
+<script src="src/constants.js"></script>
+<script src="src/state.js"></script>
+<script src="src/board.js"></script>
+<script src="src/rules.js"></script>
+<script src="src/moves.js"></script>
+<script src="src/ai-engine.js"></script>
+<script src="src/api-client.js"></script>
+<script src="src/prompts.js"></script>
+<script src="src/ai-move.js"></script>
+<script src="src/game-flow.js"></script>
+<script src="src/render.js"></script>
+<script src="src/interactions.js"></script>
+<script src="src/controls.js"></script>
+<script src="src/chat.js"></script>
+<script src="src/main.js"></script>
+
+</body>
+</html>

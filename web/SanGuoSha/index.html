@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>三国杀 · 网页版（含武将编辑器）</title>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+
+<!-- ============ 主菜单 ============ -->
+<div id="screen-menu" class="screen">
+  <h1 id="menu-title">三国杀</h1>
+  <p id="menu-sub">网页版 · 事件驱动引擎 · 本地 AI · 武将编辑器</p>
+  <div class="menu-panel panel">
+    <div class="menu-row">
+      <button class="btn btn-main mode-btn" data-mode="1v1">⚔ 1v1 单挑</button>
+      <button class="btn btn-main mode-btn" data-mode="2v2">👥 2v2 团战</button>
+      <button class="btn btn-main mode-btn" data-mode="8p">👑 八人身份局</button>
+    </div>
+    <div class="menu-row">
+      <button id="btn-editor" class="btn btn-ghost">🛠 武将编辑器</button>
+    </div>
+  </div>
+  <div class="menu-panel panel" id="char-panel">
+    <h3>选择你的武将（点击切换）</h3>
+    <div id="char-select" class="char-grid"></div>
+  </div>
+  <p class="menu-info" id="menu-info">
+    基本牌：杀 / 闪 / 桃　锦囊：决斗、过河拆桥、顺手牵羊、无中生有、南蛮入侵、万箭齐发、桃园结义、乐不思蜀、闪电、无懈可击<br>
+    装备：诸葛连弩、青釭剑、贯石斧、丈八蛇矛、雌雄双股剑、八卦阵、仁王盾、赤兔、的卢<br>
+    八人身份局：1 主公 · 2 忠臣 · 4 反贼 · 1 内奸（主公体力上限 +1，反贼阵亡凶手摸 3 张）
+  </p>
+</div>
+
+<!-- ============ 对局界面 ============ -->
+<div id="screen-game" class="screen hidden">
+  <div id="table">
+    <div id="seats"></div>
+    <div id="center">
+      <div class="piles">
+        <div id="deck" class="pile"><div class="pile-label">牌堆</div></div>
+        <div id="discard" class="pile"><div class="pile-label">弃牌堆</div></div>
+      </div>
+      <div id="phase-txt">准备中…</div>
+    </div>
+  </div>
+  <div id="log-panel">
+    <div id="log-head">⚔ 战报</div>
+    <div id="log"></div>
+  </div>
+  <div id="hand-zone">
+    <div id="prompt"></div>
+    <div id="skillbar"></div>
+    <div id="hand"></div>
+    <div id="controls">
+      <button id="btn-ok" class="btn btn-main hidden">确定</button>
+      <button id="btn-end" class="btn btn-main">结束回合</button>
+      <button id="btn-cancel" class="btn btn-ghost hidden">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 武将编辑器 ============ -->
+<div id="screen-editor" class="screen hidden">
+  <div class="ed-wrap">
+    <h2>🛠 武将编辑器</h2>
+    <div class="ed-grid">
+      <div class="panel ed-left">
+        <h4 style="color:var(--gold);letter-spacing:.2em;margin-bottom:10px">① 武将信息</h4>
+        <div class="ed-field"><label>武将名</label><input id="ed-name" maxlength="6" placeholder="如：诸葛亮"></div>
+        <div class="ed-field"><label>称号</label><input id="ed-title" maxlength="10" placeholder="如：卧龙"></div>
+        <div class="ed-field"><label>势力</label>
+          <select id="ed-kingdom"><option value="wei">魏</option><option value="shu">蜀</option><option value="wu">吴</option><option value="qun">群</option><option value="shen">神</option></select>
+        </div>
+        <div class="ed-field"><label>性别</label>
+          <select id="ed-gender"><option value="male">男</option><option value="female">女</option></select>
+        </div>
+        <div class="ed-field"><label>体力上限</label><input id="ed-maxhp" type="number" min="1" max="8" value="3"></div>
+        <div class="ed-field"><label>技能台词</label><input id="ed-line" placeholder="通用发动台词（可选）"></div>
+        <h4 style="color:var(--gold);letter-spacing:.2em;margin:14px 0 8px">② 技能列表</h4>
+        <div id="ed-skill-list"></div>
+        <button id="btn-add-skill" class="btn btn-skill" style="width:100%">＋ 添加技能</button>
+        <h4 style="color:var(--gold);letter-spacing:.2em;margin:14px 0 8px">③ 保存 / 测试</h4>
+        <div class="menu-row">
+          <button id="ed-save" class="btn btn-main btn-sm">💾 保存武将</button>
+          <button id="ed-test" class="btn btn-ghost btn-sm">🧪 测试（1v1 实战）</button>
+        </div>
+        <div class="menu-row" style="margin-top:8px">
+          <button id="ed-export" class="btn btn-ghost btn-sm">📤 导出 JSON</button>
+          <button id="ed-import" class="btn btn-ghost btn-sm">📥 导入 JSON</button>
+          <button id="ed-back" class="btn btn-ghost btn-sm">↩ 返回主菜单</button>
+        </div>
+        <input id="import-file" type="file" accept=".json" class="hidden">
+        <h4 style="color:var(--gold);letter-spacing:.2em;margin:14px 0 8px">④ 已保存的自定义武将</h4>
+        <div id="ed-custom-list"></div>
+      </div>
+      <div class="panel ed-right hidden" id="ed-skill-form">
+        <h4 style="color:var(--gold);letter-spacing:.2em;margin-bottom:10px">技能编辑面板</h4>
+        <div class="ed-block">
+          <h4>第一步 · 技能类型</h4>
+          <div class="ed-field"><label>技能名</label><input id="sk-name" maxlength="6" placeholder="如：武圣"></div>
+          <div class="ed-field"><label>技能种类</label>
+            <select id="sk-class">
+              <option value="normal">普通技</option><option value="locked">锁定技</option>
+              <option value="limited">限定技</option><option value="awaken">觉醒技</option>
+              <option value="lord">主公技</option>
+            </select>
+          </div>
+          <div class="ed-field"><label>技能形态</label>
+            <select id="sk-type">
+              <option value="active">主动技（点按钮发动）</option>
+              <option value="triggered">触发技（满足条件自动/询问）</option>
+              <option value="passive">被动修正（摸牌数/距离/杀次数）</option>
+              <option value="conversion">转化技（X 当 Y 用）</option>
+            </select>
+          </div>
+        </div>
+        <div class="ed-block" id="block-trigger">
+          <h4>第二步 · 触发时机</h4>
+          <div class="ed-field"><label>触发事件</label>
+            <select id="sk-trigger">
+              <option value="phasePlayStart">出牌阶段开始时（主动技）</option>
+              <option value="phaseTurnStart">回合开始时</option>
+              <option value="phaseTurnEnd">回合结束时</option>
+              <option value="phaseDrawStart">摸牌阶段开始时</option>
+              <option value="phaseJudgeStart">判定阶段开始时</option>
+              <option value="phaseDiscardStart">弃牌阶段开始时</option>
+              <option value="damageTaken">受到伤害后</option>
+              <option value="damageDealt">造成伤害后</option>
+              <option value="damageDealing">造成伤害时（伤害值未定）</option>
+              <option value="cardUseWhen">使用牌时</option>
+              <option value="cardBecomeTargetWhen">成为目标时</option>
+              <option value="judgeBefore">判定牌生效前（改判）</option>
+              <option value="judgeAfter">判定牌生效后</option>
+              <option value="drawAfter">摸牌后</option>
+              <option value="loseAfter">失去手牌后</option>
+              <option value="recoverAfter">回复体力后</option>
+              <option value="nearDeathEnter">进入濒死状态时</option>
+              <option value="gameStart">游戏开始时</option>
+            </select>
+          </div>
+          <div class="ed-field"><label>主动技时机</label>
+            <select id="sk-active-phase">
+              <option value="play">出牌阶段</option><option value="draw">摸牌阶段</option>
+              <option value="prepare">准备阶段</option><option value="end">结束阶段</option>
+            </select>
+          </div>
+        </div>
+        <div class="ed-block" id="block-convert" style="display:none">
+          <h4>第二步 · 转化规则</h4>
+          <div class="ed-field"><label>当什么用</label>
+            <select id="cv-as"><option>杀</option><option>闪</option><option>桃</option><option>过河拆桥</option><option>无中生有</option><option>乐不思蜀</option></select>
+          </div>
+          <div class="ed-field"><label>牌面要求</label>
+            <select id="cv-filter">
+              <option value="any">任意手牌</option><option value="red">红色牌</option><option value="black">黑色牌</option>
+              <option value="heart">♥</option><option value="diamond">♦</option><option value="spade">♠</option><option value="club">♣</option>
+            </select>
+          </div>
+          <div class="ed-field"><label>额外限制</label>
+            <select id="cv-when">
+              <option value="any">任何时候</option><option value="outsideTurn">仅回合外（急救式）</option>
+              <option value="insideTurn">仅回合内</option>
+            </select>
+          </div>
+        </div>
+        <div class="ed-block">
+          <h4>第三步 · 触发条件（可手写表达式，留空=无条件）</h4>
+          <div class="ed-field"><label>条件预设</label>
+            <select id="sk-cond-preset">
+              <option value="">无条件</option>
+              <option value="hp <= 2">体力值 ≤ 2</option>
+              <option value="handCount > hp">手牌数 > 体力值</option>
+              <option value="isWounded">已受伤</option>
+              <option value="handCount >= 2">手牌数 ≥ 2</option>
+              <option value="lostHp >= 1">已损失体力 ≥ 1</option>
+              <option value="target.hp < target.maxHp">目标已受伤</option>
+            </select>
+          </div>
+          <div class="ed-field"><label>表达式</label><input id="sk-cond" placeholder="如：handCount > hp && hp <= 2"></div>
+          <div class="ed-field"><label>消耗</label>
+            <select id="sk-cost">
+              <option value="none">无消耗</option><option value="discard1">弃置 1 张手牌</option>
+              <option value="discardAny">弃置任意张手牌（可 0）</option>
+              <option value="loseHp1">失去 1 点体力</option>
+              <option value="give2">交出 2 张手牌给目标</option>
+            </select>
+          </div>
+        </div>
+        <div class="ed-block">
+          <h4>第四步 · 目标与效果</h4>
+          <div class="ed-field"><label>目标规则</label>
+            <select id="sk-target">
+              <option value="self">自己</option><option value="other">一名其他角色</option>
+              <option value="allOthers">所有其他角色</option>
+              <option value="any">任意一名角色（含自己）</option>
+              <option value="source">伤害来源</option>
+              <option value="all">所有角色</option>
+            </select>
+          </div>
+          <div id="sk-effects"></div>
+          <button id="btn-add-effect" class="btn btn-skill btn-sm">＋ 添加效果</button>
+        </div>
+        <div class="ed-block">
+          <h4>第五步 · 次数限制与台词</h4>
+          <div class="ed-field"><label>发动限制</label>
+            <select id="sk-limit">
+              <option value="phase">每阶段限一次</option><option value="turn">每回合限一次</option>
+              <option value="game">整局游戏限一次</option><option value="never">不限制</option>
+            </select>
+          </div>
+          <div class="ed-field"><label>技能台词</label><input id="sk-quote" maxlength="40" placeholder="发动时显示的气泡台词"></div>
+          <div class="ed-field"><label>标记名称</label><input id="sk-mark" maxlength="4" placeholder="如：权（可为空）"></div>
+        </div>
+        <div class="menu-row">
+          <button id="sk-save" class="btn btn-main btn-sm">✔ 保存技能</button>
+          <button id="sk-cancel" class="btn btn-ghost btn-sm">取消</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel" id="ed-preview-panel">
+      <h4 style="color:var(--gold);letter-spacing:.2em;margin-bottom:8px">预览（武将 JSON）</h4>
+      <div id="ed-preview">尚未生成…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 弹层 ============ -->
+<div id="fx-layer"></div>
+<div id="bubble-layer"></div>
+<div id="modal" class="hidden"><div id="modal-box"></div></div>
+<div id="toast" class="hidden"></div>
+
+<!-- 后续各段代码将按顺序插入以下 <script> 标签中 -->
+<script id="seg-2" src="src/engine.js"></script>
+<script id="seg-3" src="src/cards.js"></script>
+<script id="seg-4" src="src/game.js"></script>
+<script id="seg-5" src="src/ai.js"></script>
+<script id="seg-6" src="src/generals.js"></script>
+<script id="seg-7" src="src/editor.js"></script>
+<script id="seg-8" src="src/game-ui.js"></script>
+<script id="seg-9" src="src/main.js"></script>
+<script id="seg-10a" src="src/backup-rules.js"></script>
+<script id="seg-10b" src="src/backup-ui.js"></script>
+<script id="seg-10c" src="src/patch-stability.js"></script>
+<script id="seg-10j" src="src/patch-editor-hardening.js"></script>
+<script id="seg-10k" src="src/patch-ui-request.js"></script>
+<script id="seg-10l" src="src/patch-menu-cache.js"></script>
+<script id="seg-10m" src="src/patch-targets-ai.js"></script>
+<script id="seg-10n" src="src/theme.js"></script>
+<script id="seg-10o" src="src/patch-bagua.js"></script>
+<script id="seg-10p" src="src/patch-pojun.js"></script>
+<script id="seg-10r" src="src/patch-jail.js"></script>
+<script id="seg-10s" src="src/patch-effects.js"></script>
+<script id="seg-10t" src="src/banned-generals.js"></script>
+<script id="seg-10u" src="src/skills-extra.js"></script>
+<script id="seg-10v" src="src/patch-editor-templates.js"></script>
+<script id="seg-10w" src="src/patch-distance.js"></script>
+<script id="seg-10x" src="src/patch-editor-timing.js"></script>
+<script id="seg-10y" src="src/patch-save-migrate.js"></script>
+</body>
+</html>
