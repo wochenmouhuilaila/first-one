@@ -28,10 +28,10 @@ export function boardToFEN() {
     return fen;
 }
 
-// ASCII 棋盘：面向模型，红方在下方（行0），列 a-i
+// ASCII 棋盘：面向模型，黑方在上方（行0-4），红方在下方（行5-9），列 a-i
 export function boardToAscii() {
     const lines = ['    a   b   c   d   e   f   g   h   i'];
-    for (let r = 9; r >= 0; r--) {
+    for (let r = 0; r < ROWS; r++) {
         let line = String(r) + '  ';
         for (let c = 0; c < 9; c++) {
             const p = state.board[r][c];
@@ -40,7 +40,7 @@ export function boardToAscii() {
         }
         lines.push(line.replace(/\s+$/,''));
     }
-    lines.push('（红方在下方行0-4半场，黑方在上方行5-9半场；列号a在左侧）');
+    lines.push('（黑方在上方行0-4半场，红方在下方行5-9半场；列号a在左侧）');
     return lines.join('\n');
 }
 

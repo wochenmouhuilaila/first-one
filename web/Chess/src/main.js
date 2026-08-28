@@ -1,5 +1,6 @@
 // ==================== 入口 ====================
 // 侧效应模块：注册各自的 DOM 事件（角色由它们自己完成）
+import './debug-sandbox.js';  // LLM 调试面板沙盒（debug.js 由 api-client 依赖链加载）
 import './interactions.js';   // 棋盘点击/触摸、摆棋作弊
 import './controls.js';       // 开始/重开/API设置/快捷键/resize/测试API
 import './chat.js';           // 聊天发送

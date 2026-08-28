@@ -16,13 +16,13 @@ function addChatMessage(text, sender) {
 }
 
 // 从聊天AI回复中提取意图控制块 [INTENT]{...}
-function extractIntent(text) {
+export function extractIntent(text) {
     const m = String(text||'').match(/\[INTENT\](\{[\s\S]{0,200}?\})/i);
     if (!m) return null;
     try { return JSON.parse(m[1]); } catch(e) { return null; }
 }
 // 把聊天AI解析出的意图应用到走棋AI的心智状态
-function applyIntent(intent) {
+export function applyIntent(intent) {
     if (!intent) return;
     const parts = [];
     if (typeof intent.mercy === 'number' && isFinite(intent.mercy)) {
@@ -43,7 +43,7 @@ function applyIntent(intent) {
     }
 }
 
-async function sendChatToAi(userText) {
+export async function sendChatToAi(userText) {
     const systemPrompt = (state.apiConfig.chatSystemPrompt || '你是中国象棋对局中的聊天伙伴，可以轻松聊天，也可以评论棋局。请用简短中文回复。')
         + '每次回复控制在80字以内。';
     let roleInfo = '';

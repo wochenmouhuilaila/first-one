@@ -1,7 +1,13 @@
 import { COLS, EMPTY, PIECE_NAMES, PIECE_VALUES, ROWS, isRed, sameSide } from './constants.js';
 import { state } from './state.js';
-import { boardToAscii, posToStr } from './board.js';
+import { boardToAscii, boardToFEN, posToStr } from './board.js';
 import { canPieceAttack, cloneBoard, findKing, isAttackedBy, isInCheck, kingsFacing } from './rules.js';
+
+// FEN 权威棋盘块：机器可读、无歧义，坐标判定以此为准（ASCII 仅供人类视觉参考）
+export function boardToFenBlock() {
+    return `【棋盘FEN（机器可读，以此为准；若与ASCII图不一致以FEN为准）】\n${boardToFEN(state.board)}
+（FEN共10段：第1段=行0（黑方底线）…第10段=行9（红方底线）；列号a-i从左到右；示例：rnbakabnr/9/1c5c1/…）`;
+}
 
 
 // ==================== 形势描述 ====================
@@ -44,11 +50,13 @@ export function buildBoardPrompt(side) {
         .join('\n');
     return `你是中国象棋特级大师级对弈引擎，现在执${sideName}。
 
-【棋盘】10行×9列。下方为红方（行0），上方为黑方（行9）。列用小写字母a-i表示，行用数字0-9表示。
+【棋盘】10行×9列。下方为红方（行5-9，底线行9），上方为黑方（行0-4，底线行0）。列用小写字母a-i表示，行用数字0-9表示。
 坐标格式：起始列字母+起始行号+目标列字母+目标行号，共4字符。例如红方"马二进三"对应坐标h9g7。
 
 当前棋盘（·为空点）：
 ${boardToAscii()}
+
+${boardToFenBlock()}
 
 【走子规则】
 - 车：沿直线行走，遇子即停；可吃路径上第一个敌子。

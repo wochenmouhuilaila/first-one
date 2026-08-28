@@ -6,7 +6,7 @@ import { drawBoard, resizeCanvas } from './render.js';
 
 
 // ==================== 游戏控制 ====================
-function startGame(){
+export function startGame(){
     state.userSide=dom.sideSelect.value; state.aiSide=state.userSide==='red'?'black':'red';
     state.boardFlipped=(state.userSide==='black');
     initBoard(); state.gameStarted=true; state.gameOver=false;
@@ -21,7 +21,7 @@ function startGame(){
     updateStatus(); drawBoard();
     if(state.aiSide==='red') setTimeout(()=>aiTurn(),500);
 }
-function restartGame(){
+export function restartGame(){
     state.gameStarted=false; state.gameOver=false; state.selectedPos=null; state.legalMovesForSelected=[]; state.isAiThinking=false; state.lastMove=null;
     initBoard(); state.boardFlipped=false;
     state.chatHistory = [];

@@ -125,3 +125,42 @@ canvas {
     .status-bar { font-size: 13px; }
     .chat-panel { max-height: 180px; }
 }
+
+/* ==================== LLM 调试面板 ==================== */
+#dbg-panel {
+    position: fixed; right: 8px; top: 8px; width: min(440px, 92vw);
+    max-height: 88vh; overflow: auto; z-index: 999;
+    background: #101820; color: #d8e2ea; border: 1px solid #3a4a5a; border-radius: 8px;
+    font: 11px/1.6 'Consolas','Menlo',monospace; display: none;
+    box-shadow: 0 6px 24px rgba(0,0,0,.6);
+}
+#dbg-head {
+    position: sticky; top: 0; background: #1a2733; padding: 6px 10px;
+    font-weight: 700; font-size: 12px; display: flex; gap: 8px; align-items: center;
+}
+#dbg-head button { background: #2a3a4a; color: #d8e2ea; border: 1px solid #46586a; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; }
+#dbg-head button:hover { background: #3a4a5a; }
+#dbg-count { font-weight: 400; color: #8aa0b0; }
+#dbg-body { padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+.dbg-row { border: 1px solid #2a3a4a; border-radius: 4px; background: #16222e; }
+.dbg-row summary { cursor: pointer; padding: 3px 6px; list-style: none; font-family: inherit; }
+.dbg-row summary::-webkit-details-marker { display: none; }
+.dbg-kind { display: inline-block; min-width: 44px; text-align: center; border-radius: 3px; padding: 0 4px; margin-right: 4px; font-size: 10px; }
+.dbg-api   { background: #1f3a56; color: #7cc0ff; }
+.dbg-parse { background: #3a2f10; color: #ffd479; }
+.dbg-turn  { background: #1f4a2a; color: #7fe08a; }
+.dbg-sandbox { background: #3a2050; color: #d6a7ff; }
+.dbg-pre { margin: 0; padding: 6px 8px; border-top: 1px dashed #2a3a4a; white-space: pre-wrap; word-break: break-all; color: #a8c0d0; }
+#dbg-sandbox { padding: 6px 8px; border-top: 1px solid #3a4a5a; }
+.dbg-sec-title { font-weight: 700; margin-bottom: 4px; }
+.dbg-sandbox-row { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.dbg-sandbox-row select, #dbg-text { background: #0d141c; color: #d8e2ea; border: 1px solid #3a4a5a; border-radius: 4px; font-family: inherit; font-size: 11px; }
+#dbg-text { width: 100%; padding: 4px 6px; resize: vertical; }
+#dbg-sandbox button { background: #2a3a4a; color: #d8e2ea; border: 1px solid #46586a; border-radius: 4px; padding: 2px 10px; cursor: pointer; }
+#dbg-result { margin-top: 4px; }
+.dbg-summary { font-weight: 700; margin-bottom: 2px; }
+.dbg-move { padding: 1px 4px; border-radius: 3px; }
+.dbg-ok { color: #7fe08a; }
+.dbg-bad { color: #ff8a8a; }
+.dbg-src { color: #8aa0b0; font-size: 10px; }
+.dbg-reason { color: #ffb46a; font-size: 10px; }

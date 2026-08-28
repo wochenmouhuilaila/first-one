@@ -3,7 +3,9 @@ import { getAllLegalMoves, isCheckmate, isInCheck, isStalemate, isValidMove } fr
 import { executeMove } from './moves.js';
 import { engineGuard, softPickMove } from './ai-engine.js';
 import { aiMoveWithApi } from './ai-move.js';
+import { moveToStr } from './board.js';
 import { drawBoard } from './render.js';
+import { logEvent } from './debug.js';
 
 
 // ==================== AI走棋流程 ====================
@@ -74,6 +76,12 @@ export async function aiTurn() {
     state.isAiThinking = false;
     state.currentTurn = state.userSide;
     state.lastMove = { fromRow: move.fromRow, fromCol: move.fromCol, toRow: move.toRow, toCol: move.toCol };
+    logEvent({ kind: 'turn', summary: `♟ AI回合 → ${moveToStr(move.fromRow, move.fromCol, move.toRow, move.toCol)}`, data: {
+        source: llmMove ? (state.apiConfig.engineGuard ? (move === llmMove ? '模型(护航通过)' : '引擎纠错') : '模型(无护航)') : '本地引擎',
+        llmMove: llmMove ? moveToStr(llmMove.fromRow, llmMove.fromCol, llmMove.toRow, llmMove.toCol) : null,
+        chosen: moveToStr(move.fromRow, move.fromCol, move.toRow, move.toCol),
+        spirit: llmSpirit, mercy: state.aiMind.mercy, risk: state.aiMind.risk, apiConfigured
+    } });
     afterMove();
 }
 

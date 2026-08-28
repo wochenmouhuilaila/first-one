@@ -16,7 +16,7 @@ export const CN_NUM = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'
 export const CN_NUM_REV = {1:'一',2:'二',3:'三',4:'四',5:'五',6:'六',7:'七',8:'八',9:'九'};
 export const CN_PIECE_KIND = { '车':'rook','马':'knight','炮':'cannon','兵':'pawn','卒':'pawn',
     '相':'bishop','象':'bishop','仕':'advisor','士':'advisor','帅':'king','将':'king' };
-export const RED_PIECE_SET = { '车':'R','马':'N','炮':'C','兵':'P','相':'B','仕':'A','帅':'K' };
-export const BLACK_PIECE_SET = { '车':'r','马':'n','炮':'c','卒':'p','象':'b','士':'a','将':'k' };
+export const RED_PIECE_SET = { '车':'R','马':'N','炮':'C','兵':'P','相':'B','象':'B','仕':'A','士':'A','帅':'K' };
+export const BLACK_PIECE_SET = { '车':'r','马':'n','炮':'c','卒':'p','象':'b','相':'b','士':'a','仕':'a','将':'k' };
 export function cnParse(n){ if(!n) return 0; if(CN_NUM[n]) return CN_NUM[n]; const i=parseInt(n); return (i>=1&&i<=9)?i:0; }
 

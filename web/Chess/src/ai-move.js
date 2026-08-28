@@ -1,10 +1,11 @@
 import { EMPTY, MAX_MOVE_TOKENS, PIECE_NAMES, THINK_BUDGET } from './constants.js';
 import { state, commitBudget, log, shortStr } from './state.js';
-import { boardToAscii, moveToStr } from './board.js';
+import { boardToAscii, boardToFEN, moveToStr } from './board.js';
 import { cloneBoard, getAllLegalMoves, isInCheck } from './rules.js';
 import { extractSpirit, moveToChinese, parseMoveCandidates, parseNumberChoice } from './moves.js';
 import { callApi } from './api-client.js';
 import { buildBoardPrompt, describePosition, explainIllegal } from './prompts.js';
+import { logEvent } from './debug.js';
 
 
 // ==================== 主走棋模式：模型自由选点 ====================
@@ -30,7 +31,7 @@ export async function askForMove(side) {
                 jsonMode: true,
                 thinking: thinkingNow,
                 thinkingBudget: thinkingNow!=='off' ? THINK_BUDGET : 0,
-                timeout: thinkingNow!=='off' ? 90000 : 60000
+                timeout: thinkingNow!=='off' ? 180000 : 60000
             });
         } catch(err) {
             log(`API请求失败: ${err.message}`);
@@ -80,13 +81,21 @@ export async function askForMove(side) {
             return false;
         };
         tryCands(parseMoveCandidates(res.content, side), 'JSON/坐标/记谱');
-        if (!hit && res.reasoning) tryCands(parseMoveCandidates(res.reasoning, side), '思考内容');
+        if (!hit && res.reasoning) {
+            // 思考内容兜底：一段思考里往往分析过多个候选，越靠近文末越接近最终结论 → 取最后一个合法候选
+            const rc = parseMoveCandidates(res.reasoning, side);
+            for (let i = rc.length - 1; i >= 0; i--) {
+                const key = moveToStr(rc[i].fromRow, rc[i].fromCol, rc[i].toRow, rc[i].toCol);
+                if (legalSet.has(key)) { hit = rc[i]; hitSource = '思考内容(末位候选)'; break; }
+            }
+        }
         if (hit) {
             commitBudget(maxTok);
             const key = moveToStr(hit.fromRow,hit.fromCol,hit.toRow,hit.toCol);
             const cn = moveToChinese(hit.fromRow,hit.fromCol,hit.toRow,hit.toCol);
             const spirit = extractSpirit(res.content);
             log(`✔ 解析成功（${hitSource}）: ${key}${cn ? ' ' + cn : ''}${spirit!=='serious' ? ' [spirit:'+spirit+']' : ''}`);
+            logEvent({ kind: 'parse', summary: `✓ 主模式 采纳 ${key}（${hitSource}）`, data: { mode: '主模式', attempt: attempt + 1, hit: key, hitSource, spirit, content: res.content.slice(0, 500), reasoning: (res.reasoning || '').slice(0, 500) } });
             return { move: hit, spirit };
         }
 
@@ -105,6 +114,11 @@ export async function askForMove(side) {
         const first = cands0[0] || cands1[0];
         const reason = first ? explainIllegal(first.fromRow,first.fromCol,first.toRow,first.toCol,side) : '无法从回复中识别出任何坐标';
         log(`模型有回复但无法采用（${reason}），携带反馈重试...`);
+        logEvent({ kind: 'parse', summary: `✗ 主模式 尝试${attempt+1} 未采纳 · ${reason}`, data: {
+            mode: '主模式', attempt: attempt + 1, reason,
+            cands: [...cands0, ...cands1].slice(0, 12).map(c => ({ move: moveToStr(c.fromRow,c.fromCol,c.toRow,c.toCol), source: c.source })),
+            content: res.content.slice(0, 500), reasoning: (res.reasoning || '').slice(0, 500)
+        } });
         msgs.push({ role:'user', content: `你上一条回复「${shortStr(res.content,80)}」无法采用，原因：${reason}。请重新对照棋盘分析，只输出JSON：{"move":"<4字符坐标>"}` });
     }
     return null;
@@ -131,6 +145,9 @@ export async function askByNumber(side) {
 
 ${boardToAscii()}
 
+【棋盘FEN（机器可读，以此为准）】
+${boardToFEN(state.board)}
+
 【当前形势】${describePosition(state.board, side)}
 
 【${sideName}全部合法走法】共${legalMoves.length}步（编号. 中文记谱(坐标)[吃子/将军]）：
@@ -152,7 +169,7 @@ ${items}
                 jsonMode: true,
                 thinking: thinkingNow,
                 thinkingBudget: thinkingNow!=='off' ? THINK_BUDGET : 0,
-                timeout: thinkingNow!=='off' ? 90000 : 60000
+                timeout: thinkingNow!=='off' ? 180000 : 60000
             });
         } catch(err) {
             log(`编号模式API请求失败: ${err.message}`);
@@ -166,6 +183,7 @@ ${items}
             const m = legalMoves[idx];
             commitBudget(maxTok);
             log(`✔ 编号模式解析成功: 第${idx+1}步 ${moveToStr(m.fromRow,m.fromCol,m.toRow,m.toCol)}`);
+            logEvent({ kind: 'parse', summary: `✓ 编号模式 采纳 第${idx+1}步 ${moveToStr(m.fromRow,m.fromCol,m.toRow,m.toCol)}`, data: { mode: '编号模式', attempt: attempt + 1, idx, fullText: fullText.slice(0, 500) } });
             return { move: m, spirit: null };
         }
         for (const cand of parseMoveCandidates(fullText, side)) {
@@ -177,6 +195,7 @@ ${items}
                 return { move: hit, spirit: null };
             }
         }
+        logEvent({ kind: 'parse', summary: `✗ 编号模式 尝试${attempt+1} 未采纳（choice无法解析且无匹配坐标）`, data: { mode: '编号模式', attempt: attempt + 1, fullText: fullText.slice(0, 500) } });
         // 思考超限自愈
         const overthink = !res.content && (res.finishReason==='length' || res.reasoning);
         if (thinkingNow!=='off' && overthink) {
