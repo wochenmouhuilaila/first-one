@@ -1,9 +1,12 @@
+import { COLS, EMPTY, ROWS, isRed, sameSide } from './constants.js';
+
+
 // ==================== 走法生成（完整规则引擎） ====================
-function inBoard(r,c) { return r>=0&&r<ROWS&&c>=0&&c<COLS; }
+export function inBoard(r,c) { return r>=0&&r<ROWS&&c>=0&&c<COLS; }
 function inRedPalace(r,c){ return r>=7&&r<=9&&c>=3&&c<=5; }
 function inBlackPalace(r,c){ return r>=0&&r<=2&&c>=3&&c<=5; }
 
-function isAttackedBy(bs,tr,tc,attackerSide) {
+export function isAttackedBy(bs,tr,tc,attackerSide) {
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
         const p=bs[r][c]; if(p===EMPTY) continue;
         const pRed=isRed(p);
@@ -13,7 +16,7 @@ function isAttackedBy(bs,tr,tc,attackerSide) {
     return false;
 }
 
-function canPieceAttack(bs,fr,fc,tr,tc,p) {
+export function canPieceAttack(bs,fr,fc,tr,tc,p) {
     if(fr===tr&&fc===tc) return false;
     const pl=p.toLowerCase(), pred=isRed(p);
     switch(pl) {
@@ -72,7 +75,7 @@ function canPawnMove(bs,fr,fc,tr,tc,pred) {
     return false;
 }
 
-function getAllLegalMoves(bs,side) {
+export function getAllLegalMoves(bs,side) {
     const moves=[];
     for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
         const p=bs[r][c]; if(p===EMPTY) continue;
@@ -83,7 +86,7 @@ function getAllLegalMoves(bs,side) {
     }
     return moves;
 }
-function getPieceLegalMoves(bs,row,col,piece) {
+export function getPieceLegalMoves(bs,row,col,piece) {
     const res=[];
     const pred=isRed(piece), side=pred?'red':'black';
     for(let tr=0;tr<ROWS;tr++) for(let tc=0;tc<COLS;tc++) {
@@ -101,13 +104,13 @@ function getPieceLegalMoves(bs,row,col,piece) {
     }
     return res;
 }
-function cloneBoard(bs){ return bs.map(row=>[...row]); }
-function findKing(bs,side){ const ch=side==='red'?'K':'k'; for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(bs[r][c]===ch) return {row:r,col:c}; return null; }
-function kingsFacing(bs){ const rk=findKing(bs,'red'), bk=findKing(bs,'black'); if(!rk||!bk) return false; if(rk.col!==bk.col) return false; const min=Math.min(rk.row,bk.row),max=Math.max(rk.row,bk.row); for(let r=min+1;r<max;r++) if(bs[r][rk.col]!==EMPTY) return false; return true; }
-function isInCheck(bs,side){ const kp=findKing(bs,side); if(!kp) return true; const attacker=side==='red'?'black':'red'; return isAttackedBy(bs,kp.row,kp.col,attacker); }
-function isCheckmate(bs,side){ return isInCheck(bs,side) && getAllLegalMoves(bs,side).length===0; }
-function isStalemate(bs,side){ return !isInCheck(bs,side) && getAllLegalMoves(bs,side).length===0; }
-function isValidMove(bs,fr,fc,tr,tc,side){
+export function cloneBoard(bs){ return bs.map(row=>[...row]); }
+export function findKing(bs,side){ const ch=side==='red'?'K':'k'; for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(bs[r][c]===ch) return {row:r,col:c}; return null; }
+export function kingsFacing(bs){ const rk=findKing(bs,'red'), bk=findKing(bs,'black'); if(!rk||!bk) return false; if(rk.col!==bk.col) return false; const min=Math.min(rk.row,bk.row),max=Math.max(rk.row,bk.row); for(let r=min+1;r<max;r++) if(bs[r][rk.col]!==EMPTY) return false; return true; }
+export function isInCheck(bs,side){ const kp=findKing(bs,side); if(!kp) return true; const attacker=side==='red'?'black':'red'; return isAttackedBy(bs,kp.row,kp.col,attacker); }
+export function isCheckmate(bs,side){ return isInCheck(bs,side) && getAllLegalMoves(bs,side).length===0; }
+export function isStalemate(bs,side){ return !isInCheck(bs,side) && getAllLegalMoves(bs,side).length===0; }
+export function isValidMove(bs,fr,fc,tr,tc,side){
     if(!inBoard(fr,fc)||!inBoard(tr,tc)) return false;
     const p=bs[fr][fc]; if(p===EMPTY) return false;
     const pred=isRed(p); if((side==='red'&&!pred)||(side==='black'&&pred)) return false;

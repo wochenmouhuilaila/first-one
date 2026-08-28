@@ -1,0 +1,6 @@
+{
+    "name": "chess-web",
+    "private": true,
+    "type": "module",
+    "description": "中国象棋网页版（ES Module 拆分）。type=module 仅供 Node 工具链（node --check / 本地测试）按 ESM 解析 .js；浏览器不受影响。"
+}

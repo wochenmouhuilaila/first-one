@@ -1,21 +1,26 @@
+import { COLS, EMPTY, PIECE_VALUES, ROWS, isRed } from './constants.js';
+import { state, log } from './state.js';
+import { cloneBoard, getAllLegalMoves, isAttackedBy, isInCheck } from './rules.js';
+
+
 // ==================== 本地AI（兜底，带基本评估） ====================
-function localAiMove(side) {
-    const moves=getAllLegalMoves(board,side);
+export function localAiMove(side) {
+    const moves=getAllLegalMoves(state.board,side);
     if(moves.length===0) return null;
     const opp = side==='red' ? 'black' : 'red';
     let best=null, bestScore=-1e9;
     for(const m of moves){
         let s=0;
-        const piece=board[m.fromRow][m.fromCol];
-        const target=board[m.toRow][m.toCol];
+        const piece=state.board[m.fromRow][m.fromCol];
+        const target=state.board[m.toRow][m.toCol];
         if(target!==EMPTY) s += (PIECE_VALUES[target]||0)*10;           // 吃子
-        const nb=cloneBoard(board); nb[m.toRow][m.toCol]=piece; nb[m.fromRow][m.fromCol]=EMPTY;
+        const nb=cloneBoard(state.board); nb[m.toRow][m.toCol]=piece; nb[m.fromRow][m.fromCol]=EMPTY;
         if(isInCheck(nb,opp)) s += 4;                                    // 将军
-        if(isAttackedBy(board,m.toRow,m.toCol,opp)) s -= (PIECE_VALUES[piece]||1)*6; // 落点风险
+        if(isAttackedBy(state.board,m.toRow,m.toCol,opp)) s -= (PIECE_VALUES[piece]||1)*6; // 落点风险
         s += (side==='red' ? (m.fromRow-m.toRow) : (m.toRow-m.fromRow))*0.1;        // 前进
         s += (4-Math.abs(m.toCol-4))*0.05;                               // 中央
-        if(lastMove && lastMove.toRow===m.fromRow && lastMove.toCol===m.fromCol
-           && lastMove.fromRow===m.toRow && lastMove.fromCol===m.toCol) s -= 3;     // 避免来回走
+        if(state.lastMove && state.lastMove.toRow===m.fromRow && state.lastMove.toCol===m.fromCol
+           && state.lastMove.fromRow===m.toRow && state.lastMove.fromCol===m.toCol) s -= 3;     // 避免来回走
         s += Math.random()*0.4;
         if(s>bestScore){ bestScore=s; best=m; }
     }
@@ -30,7 +35,7 @@ const SEARCH_NODE_LIMIT = 300000;  // 节点上限，保证毫秒级
 let searchNodes = 0;
 
 // 静态评估（红方视角，单位：厘兵）
-function evalBoard(bs) {
+export function evalBoard(bs) {
     let score = 0;
     for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
         const p = bs[r][c]; if (p===EMPTY) continue;
@@ -105,7 +110,7 @@ function alphaBeta(bs, depth, alpha, beta, side, ply) {
 }
 
 // 搜索最佳走法（返回 {move, score}，score为走完该步后己方视角的评估值）
-function searchBestMove(bs, side) {
+export function searchBestMove(bs, side) {
     const moves = getAllLegalMoves(bs, side);
     if (moves.length===0) return null;
     const depth = moves.length <= 8 ? 4 : 3;
@@ -123,18 +128,18 @@ function searchBestMove(bs, side) {
 }
 
 // 引擎护航：AI自由选点若明显劣于引擎最优则纠正；但AI可依"心智状态"选择性无视纠正（放水/任性）
-function engineGuard(llmMove, side, spirit) {
-    const moves = getAllLegalMoves(board, side);
+export function engineGuard(llmMove, side, spirit) {
+    const moves = getAllLegalMoves(state.board, side);
     const depth = moves.length <= 8 ? 4 : 3;
-    const eng = searchBestMove(board, side);
+    const eng = searchBestMove(state.board, side);
     if (!eng) return null;
     if (!llmMove) { log('引擎接管（AI未给出有效走法）'); return eng.move; }
     const opp = side==='red'?'black':'red';
-    const nb = cloneBoard(board);
+    const nb = cloneBoard(state.board);
     nb[llmMove.toRow][llmMove.toCol]=nb[llmMove.fromRow][llmMove.fromCol];
     nb[llmMove.fromRow][llmMove.fromCol]=EMPTY;
     const llmVal = -alphaBeta(nb, depth-1, -SEARCH_INF, SEARCH_INF, opp, 1);
-    const m = aiMind.mercy, r = aiMind.risk;
+    const m = state.aiMind.mercy, r = state.aiMind.risk;
     const margin = GUARD_MARGIN + m*250 + r*200;           // 放水/任性越大，容忍越差的走法
     if (llmVal >= eng.score - margin) return llmMove;       // 质量过关
     // "任性权"：AI依状态与spirit决定无视引擎纠正（偶尔自发的小任性3%）
@@ -151,19 +156,19 @@ function engineGuard(llmMove, side, spirit) {
 }
 
 // 放水兜底：AI没有给出走法时，按放水/任性程度在"次优窗口"内随机选择（否则选最优）
-function softPickMove(side) {
-    const eng = searchBestMove(board, side);
+export function softPickMove(side) {
+    const eng = searchBestMove(state.board, side);
     if (!eng) return null;
-    const m = aiMind.mercy, r = aiMind.risk;
+    const m = state.aiMind.mercy, r = state.aiMind.risk;
     if (m===0 && r===0) return eng.move;
     const win = m*120 + r*80; // 容忍窗口（厘兵）
-    const moves = getAllLegalMoves(board, side);
+    const moves = getAllLegalMoves(state.board, side);
     const depth = moves.length <= 8 ? 4 : 3;
     const opp = side==='red'?'black':'red';
     let bestV = -SEARCH_INF;
     const scored = [];
     for (const mv of moves) {
-        const nb = cloneBoard(board);
+        const nb = cloneBoard(state.board);
         nb[mv.toRow][mv.toCol]=nb[mv.fromRow][mv.fromCol]; nb[mv.fromRow][mv.fromCol]=EMPTY;
         const v = -alphaBeta(nb, depth-1, -SEARCH_INF, SEARCH_INF, opp, 1);
         scored.push({mv,v});

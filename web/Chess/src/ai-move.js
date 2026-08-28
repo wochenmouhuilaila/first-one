@@ -1,15 +1,24 @@
+import { EMPTY, MAX_MOVE_TOKENS, PIECE_NAMES, THINK_BUDGET } from './constants.js';
+import { state, commitBudget, log, shortStr } from './state.js';
+import { boardToAscii, moveToStr } from './board.js';
+import { cloneBoard, getAllLegalMoves, isInCheck } from './rules.js';
+import { extractSpirit, moveToChinese, parseMoveCandidates, parseNumberChoice } from './moves.js';
+import { callApi } from './api-client.js';
+import { buildBoardPrompt, describePosition, explainIllegal } from './prompts.js';
+
+
 // ==================== 主走棋模式：模型自由选点 ====================
-async function askForMove(side) {
+export async function askForMove(side) {
     const sideName = side==='red' ? '红方' : '黑方';
-    const legalSet = new Set(getAllLegalMoves(board, side).map(m => moveToStr(m.fromRow,m.fromCol,m.toRow,m.toCol)));
+    const legalSet = new Set(getAllLegalMoves(state.board, side).map(m => moveToStr(m.fromRow,m.fromCol,m.toRow,m.toCol)));
     if (legalSet.size===0) return null;
     const msgs = [
         { role:'system', content: buildBoardPrompt(side) },
         { role:'user', content: `请为${sideName}走出最优一步。` }
     ];
-    const baseTok = Math.max(apiConfig.moveMaxTokens || 4096, 512);
-    let maxTok = Math.max(baseTok, effMoveBudget || 0);
-    let thinkingNow = autoThinkingOff ? 'off' : (apiConfig.thinkingMode || 'off');
+    const baseTok = Math.max(state.apiConfig.moveMaxTokens || 4096, 512);
+    let maxTok = Math.max(baseTok, state.effMoveBudget || 0);
+    let thinkingNow = state.autoThinkingOff ? 'off' : (state.apiConfig.thinkingMode || 'off');
     let budgetBumped = false;
     const maxAttempts = 3;
     for (let attempt=0; attempt<maxAttempts; attempt++) {
@@ -37,21 +46,21 @@ async function askForMove(side) {
         if (thinkingNow!=='off' && overthink) {
             log('检测到思考超限（思考未收敛），本步改用关闭思考模式重试...');
             thinkingNow = 'off';
-            if (!autoThinkingOff) { autoThinkingOff = true; log('本局后续走棋将自动使用关闭思考（已证实思考模式无法收敛）。'); }
+            if (!state.autoThinkingOff) { state.autoThinkingOff = true; log('本局后续走棋将自动使用关闭思考（已证实思考模式无法收敛）。'); }
             continue;
         }
-        if (thinkingNow==='off' && res.reasoning && !thoughtOffWarningLogged) {
-            thoughtOffWarningLogged = true;
+        if (thinkingNow==='off' && res.reasoning && !state.thoughtOffWarningLogged) {
+            state.thoughtOffWarningLogged = true;
             log('提示：该接口似乎忽略了"关闭思考"参数（仍在思考）。已自动加大token预算并缓存。');
-            effMoveBudget = Math.max(effMoveBudget, 8192);
+            state.effMoveBudget = Math.max(state.effMoveBudget, 8192);
         }
 
         // ---- content 为空 ----
         if (!res.content) {
             if ((res.finishReason==='length' || res.reasoning) && !budgetBumped && maxTok < MAX_MOVE_TOKENS) {
                 budgetBumped = true;
-                maxTok = Math.min(MAX_MOVE_TOKENS, Math.max(maxTok*2, effMoveBudget || 0));
-                effMoveBudget = maxTok;
+                maxTok = Math.min(MAX_MOVE_TOKENS, Math.max(maxTok*2, state.effMoveBudget || 0));
+                state.effMoveBudget = maxTok;
                 log(`content为空且思考吃光预算，max_tokens提升至${maxTok}重试...`);
                 continue;
             }
@@ -85,7 +94,7 @@ async function askForMove(side) {
         if (res.finishReason==='length' && !budgetBumped && maxTok < MAX_MOVE_TOKENS) {
             budgetBumped = true;
             maxTok = Math.min(MAX_MOVE_TOKENS, maxTok*2);
-            effMoveBudget = maxTok;
+            state.effMoveBudget = maxTok;
             log(`回复被截断(length)，max_tokens提升至${maxTok}重试...`);
             continue;
         }
@@ -102,18 +111,18 @@ async function askForMove(side) {
 }
 
 // ==================== 降级模式：全量合法走法编号选择 ====================
-async function askByNumber(side) {
+export async function askByNumber(side) {
     const sideName = side==='red' ? '红方' : '黑方';
-    const legalMoves = getAllLegalMoves(board, side);
+    const legalMoves = getAllLegalMoves(state.board, side);
     if (legalMoves.length===0) return null;
     const opp = side==='red' ? 'black' : 'red';
     const items = legalMoves.map((m,i) => {
         const cn = moveToChinese(m.fromRow,m.fromCol,m.toRow,m.toCol) || '';
         const coord = moveToStr(m.fromRow,m.fromCol,m.toRow,m.toCol);
-        const captured = board[m.toRow][m.toCol];
+        const captured = state.board[m.toRow][m.toCol];
         let extra='';
         if (captured!==EMPTY) extra = ' [吃' + PIECE_NAMES[captured] + ']';
-        const nb = cloneBoard(board);
+        const nb = cloneBoard(state.board);
         nb[m.toRow][m.toCol]=nb[m.fromRow][m.fromCol]; nb[m.fromRow][m.fromCol]=EMPTY;
         if (isInCheck(nb, opp)) extra += ' [将军]';
         return `${i+1}. ${cn} (${coord})${extra}`;
@@ -122,7 +131,7 @@ async function askByNumber(side) {
 
 ${boardToAscii()}
 
-【当前形势】${describePosition(board, side)}
+【当前形势】${describePosition(state.board, side)}
 
 【${sideName}全部合法走法】共${legalMoves.length}步（编号. 中文记谱(坐标)[吃子/将军]）：
 ${items}
@@ -132,8 +141,8 @@ ${items}
         { role:'system', content: system },
         { role:'user', content: `请为${sideName}选择最优走法的编号。` }
     ];
-    let maxTok = Math.max(apiConfig.moveMaxTokens || 4096, effMoveBudget || 0, 512);
-    let thinkingNow = autoThinkingOff ? 'off' : (apiConfig.thinkingMode || 'off');
+    let maxTok = Math.max(state.apiConfig.moveMaxTokens || 4096, state.effMoveBudget || 0, 512);
+    let thinkingNow = state.autoThinkingOff ? 'off' : (state.apiConfig.thinkingMode || 'off');
     for (let attempt=0; attempt<2; attempt++) {
         let res;
         try {
@@ -173,13 +182,13 @@ ${items}
         if (thinkingNow!=='off' && overthink) {
             log('编号模式检测到思考超限，本步改用关闭思考重试...');
             thinkingNow = 'off';
-            if (!autoThinkingOff) { autoThinkingOff = true; log('本局后续走棋将自动使用关闭思考。'); }
+            if (!state.autoThinkingOff) { state.autoThinkingOff = true; log('本局后续走棋将自动使用关闭思考。'); }
             if (attempt===0) continue;
             return null;
         }
         if (attempt===0 && !res.content && (res.finishReason==='length' || res.reasoning) && maxTok < MAX_MOVE_TOKENS) {
             maxTok = Math.min(MAX_MOVE_TOKENS, maxTok*2);
-            effMoveBudget = maxTok;
+            state.effMoveBudget = maxTok;
             log(`编号模式content为空，max_tokens提升至${maxTok}重试...`);
             continue;
         }
@@ -190,16 +199,16 @@ ${items}
     return null;
 }
 
-async function aiMoveWithApi() {
-    if (apiConfig.numberMode) {
-        const m = await askByNumber(aiSide);
+export async function aiMoveWithApi() {
+    if (state.apiConfig.numberMode) {
+        const m = await askByNumber(state.aiSide);
         if (m) return m;
         throw new Error('编号模式失败');
     }
-    const main = await askForMove(aiSide);
+    const main = await askForMove(state.aiSide);
     if (main) return main;
     log('主模式（自由选点）未获得合法走法，降级为全量编号模式...');
-    const nb = await askByNumber(aiSide);
+    const nb = await askByNumber(state.aiSide);
     if (nb) return nb;
     throw new Error('坐标模式和编号模式均失败');
 }

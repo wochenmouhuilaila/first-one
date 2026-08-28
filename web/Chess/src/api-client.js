@@ -1,3 +1,6 @@
+import { state, log, shortStr } from './state.js';
+
+
 // ==================== API 调用核心（DeepSeek V4 思考模型适配） ====================
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
@@ -15,7 +18,7 @@ function extractRejectedKey(errText) {
 // 用于兼容不支持 thinking / response_format 等扩展参数的接口。
 function buildParamVariants(model, messages, opt) {
     const base = { model, messages };
-    const rejected = apiRejected ? new Set(apiRejected) : new Set();
+    const rejected = state.apiRejected ? new Set(state.apiRejected) : new Set();
     if (opt.maxTokens) {
         if (rejected.has('max_tokens')) base.max_completion_tokens = opt.maxTokens;
         else base.max_tokens = opt.maxTokens;
@@ -34,7 +37,7 @@ function buildParamVariants(model, messages, opt) {
     // 过滤已知被拒绝的参数
     const usable = extra.filter(([k]) => !rejected.has(k));
     const variants = [];
-    const allowed = apiCompat ? new Set(Object.keys(apiCompat)) : null;
+    const allowed = state.apiCompat ? new Set(Object.keys(state.apiCompat)) : null;
     const makeBody = (keys) => {
         const b = Object.assign({}, base);
         for (const [k,v] of usable) if (keys.has(k)) b[k] = v;
@@ -99,14 +102,14 @@ function extractResponse(data) {
  * }
  * 返回 { content, reasoning, finishReason, usage }
  */
-async function callApi(messages, options = {}) {
-    const endpoint = apiConfig.endpoint.trim();
-    const key = apiConfig.key.trim();
-    const model = apiConfig.model.trim();
+export async function callApi(messages, options = {}) {
+    const endpoint = state.apiConfig.endpoint.trim();
+    const key = state.apiConfig.key.trim();
+    const model = state.apiConfig.model.trim();
     if (!endpoint || !model) throw new Error('API未配置（endpoint或model为空）');
 
     const opt = {
-        maxTokens: options.maxTokens || apiConfig.maxTokens || 300,
+        maxTokens: options.maxTokens || state.apiConfig.maxTokens || 300,
         temperature: options.temperature,
         jsonMode: !!options.jsonMode,
         thinking: options.thinking || 'default',
@@ -151,8 +154,8 @@ async function callApi(messages, options = {}) {
                     if (kind==='PARAM') {
                         const badKey = extractRejectedKey(errText);
                         if (badKey) {
-                            apiRejected = apiRejected || new Set();
-                            apiRejected.add(badKey);
+                            state.apiRejected = state.apiRejected || new Set();
+                            state.apiRejected.add(badKey);
                             log(`API不支持参数 "${badKey}"，已记住并跳过`);
                         } else {
                             log(`API拒绝当前参数组合(${shortStr(errText,80)})，自动降级参数重试...`);
@@ -166,8 +169,8 @@ async function callApi(messages, options = {}) {
             let data;
             try { data = JSON.parse(errText); } catch(e) { throw new Error('API返回非JSON内容: ' + shortStr(errText,200)); }
             // 成功：更新兼容缓存
-            apiCompat = {};
-            for (const k in body) if (k!=='model' && k!=='messages') apiCompat[k]=true;
+            state.apiCompat = {};
+            for (const k in body) if (k!=='model' && k!=='messages') state.apiCompat[k]=true;
             return extractResponse(data);
         } catch(err) {
             clearTimeout(timer);

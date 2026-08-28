@@ -1,5 +1,11 @@
+import { COLS, EMPTY, PIECE_NAMES, PIECE_VALUES, ROWS, isRed, sameSide } from './constants.js';
+import { state } from './state.js';
+import { boardToAscii, posToStr } from './board.js';
+import { canPieceAttack, cloneBoard, findKing, isAttackedBy, isInCheck, kingsFacing } from './rules.js';
+
+
 // ==================== 形势描述 ====================
-function describePosition(bs, side) {
+export function describePosition(bs, side) {
     let redScore=0, blackScore=0;
     for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
         const p=bs[r][c]; if(p===EMPTY) continue;
@@ -18,7 +24,7 @@ function describePosition(bs, side) {
 }
 
 // 找出某方"正被对方攻击"的棋子（危险提示）
-function describeThreats(bs, side) {
+export function describeThreats(bs, side) {
     const opp = side==='red'?'black':'red';
     const hits = [];
     for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
@@ -29,11 +35,11 @@ function describeThreats(bs, side) {
     return hits;
 }
 
-function buildBoardPrompt(side) {
+export function buildBoardPrompt(side) {
     const sideName = side==='red' ? '红方' : '黑方';
-    const threats = describeThreats(board, side);
-    const recentMoves = moveHistory.length ? moveHistory.slice(-6).join('；') : '（开局）';
-    const chatTail = chatHistory.slice(-6)
+    const threats = describeThreats(state.board, side);
+    const recentMoves = state.moveHistory.length ? state.moveHistory.slice(-6).join('；') : '（开局）';
+    const chatTail = state.chatHistory.slice(-6)
         .map(m => `${m.role==='user' ? '用户' : 'AI'}：${String(m.content).slice(0,60)}`)
         .join('\n');
     return `你是中国象棋特级大师级对弈引擎，现在执${sideName}。
@@ -54,11 +60,11 @@ ${boardToAscii()}
 - 兵/卒：未过河只能向前一步，过河后可向前或左右一步，永不后退。
 - 禁止走出导致己方帅将被吃（送将）的走法。
 
-【当前形势】${describePosition(board, side)}
+【当前形势】${describePosition(state.board, side)}
 【最近走法】${recentMoves}
 【危险警告】你方正被对方攻击的棋子：${threats.length ? threats.join('、') : '无'}（若你正被将军，必须先应将！）
 
-【AI当前状态（来自聊天室，每局可变）】放水程度：${aiMind.mercy}/3（0=全力以赴，3=大幅退让）；任性程度：${aiMind.risk}/3（越高越倾向无视稳妥评估）；情绪：${aiMind.mood||'平静'}。
+【AI当前状态（来自聊天室，每局可变）】放水程度：${state.aiMind.mercy}/3（0=全力以赴，3=大幅退让）；任性程度：${state.aiMind.risk}/3（越高越倾向无视稳妥评估）；情绪：${state.aiMind.mood||'平静'}。
 【聊天室动态】${chatTail || '（暂无对话）'}
 
 【任务】请通盘分析（威胁、子力、位置、后续变化），为${sideName}走出你认为最优的一步。你可以参考聊天室动态与当前状态决定本次走棋风格：
@@ -68,15 +74,15 @@ ${boardToAscii()}
 }
 
 // 诊断一条非法走法的具体原因（用于反馈给模型）
-function explainIllegal(fr,fc,tr,tc,side){
-    const p = board[fr][fc];
+export function explainIllegal(fr,fc,tr,tc,side){
+    const p = state.board[fr][fc];
     if(!p) return `起始格${posToStr(fr,fc)}上没有你的棋子`;
     const pred=isRed(p);
     if((side==='red'&&!pred)||(side==='black'&&pred)) return `起始格${posToStr(fr,fc)}上是对方棋子，不是你的`;
-    const target=board[tr][tc];
+    const target=state.board[tr][tc];
     if(target!==EMPTY&&sameSide(target,p)) return `目标格${posToStr(tr,tc)}上有你自己的棋子`;
-    if(!canPieceAttack(board,fr,fc,tr,tc,p)) return `该棋子不能走到${posToStr(tr,tc)}（不符合走子规则，注意马腿/象眼/炮架）`;
-    const nb=cloneBoard(board); nb[tr][tc]=p; nb[fr][fc]=EMPTY;
+    if(!canPieceAttack(state.board,fr,fc,tr,tc,p)) return `该棋子不能走到${posToStr(tr,tc)}（不符合走子规则，注意马腿/象眼/炮架）`;
+    const nb=cloneBoard(state.board); nb[tr][tc]=p; nb[fr][fc]=EMPTY;
     if(kingsFacing(nb)) return '走后两帅将同列照面（不允许）';
     const kp=findKing(nb,side);
     if(kp && isAttackedBy(nb, kp.row, kp.col, side==='red'?'black':'red')) return '走后你的帅/将处于被吃状态（送将）';

@@ -1,22 +1,28 @@
+import { BLACK_PIECE_SET, CN_NUM, CN_NUM_REV, CN_PIECE_KIND, EMPTY, PIECE_NAMES, RED_PIECE_SET, ROWS, cnParse, isRed } from './constants.js';
+import { state, log } from './state.js';
+import { moveToStr, strToPos } from './board.js';
+import { inBoard } from './rules.js';
+
+
 // ==================== 执行走法 ====================
-function executeMove(fr,fc,tr,tc) {
-    const piece=board[fr][fc]; const captured=board[tr][tc];
+export function executeMove(fr,fc,tr,tc) {
+    const piece=state.board[fr][fc]; const captured=state.board[tr][tc];
     const cnBefore = moveToChinese(fr,fc,tr,tc, piece); // 必须在落子前计算
-    board[tr][tc]=piece; board[fr][fc]=EMPTY;
-    lastMove={fromRow:fr,fromCol:fc,toRow:tr,toCol:tc};
+    state.board[tr][tc]=piece; state.board[fr][fc]=EMPTY;
+    state.lastMove={fromRow:fr,fromCol:fc,toRow:tr,toCol:tc};
     if(captured!==EMPTY) log(`吃子: ${PIECE_NAMES[captured]}`);
     const side = isRed(piece) ? '红方' : '黑方';
     const moveDesc = `${side} ${PIECE_NAMES[piece]} ${cnBefore||''} (${moveToStr(fr,fc,tr,tc)})`;
-    moveHistory.push(moveDesc);
-    if (moveHistory.length > 20) moveHistory.shift();
+    state.moveHistory.push(moveDesc);
+    if (state.moveHistory.length > 20) state.moveHistory.shift();
     return {piece,captured};
 }
 
 // ==================== 中文记谱 <-> 坐标 双向转换 ====================
 // 把一步棋转成中文记谱（如 炮二平五 / 马八进七 / 前车进一）
 // pieceOverride：棋盘已落子后调用时传入落子棋子，避免原位置为空导致返回空串
-function moveToChinese(fr,fc,tr,tc, pieceOverride) {
-    const piece = pieceOverride !== undefined ? pieceOverride : board[fr][fc];
+export function moveToChinese(fr,fc,tr,tc, pieceOverride) {
+    const piece = pieceOverride !== undefined ? pieceOverride : state.board[fr][fc];
     if (!piece) return '';
     const side = isRed(piece) ? 'red' : 'black';
     const pieceCh = PIECE_NAMES[piece]; // 车/马/炮/兵/卒/相/象/仕/士/帅/将
@@ -26,7 +32,7 @@ function moveToChinese(fr,fc,tr,tc, pieceOverride) {
     const toColNum = side==='red' ? 9-tc : tc+1;
     // 前缀：同列同类型子
     let cnt=0, rows=[];
-    for (let r=0;r<ROWS;r++) if (board[r][fc]===piece) { cnt++; rows.push(r); }
+    for (let r=0;r<ROWS;r++) if (state.board[r][fc]===piece) { cnt++; rows.push(r); }
     let prefix='';
     if (cnt>=2) {
         if (cnt===2) {
@@ -57,7 +63,7 @@ function moveToChinese(fr,fc,tr,tc, pieceOverride) {
 }
 
 // 从任意文本中解析中文记谱，返回候选走法列表（未做合法性过滤）
-function parseChineseNotation(text, side) {
+export function parseChineseNotation(text, side) {
     const results = [];
     if (!text) return results;
     const pattern = /(前|后|[一二三四五])?(车|马|炮|兵|卒|相|象|仕|士|帅|将)([一二三四五六七八九1-9])(进|退|平)([一二三四五六七八九1-9])/g;
@@ -78,7 +84,7 @@ function parseChineseNotation(text, side) {
         if (fromCol<0||fromCol>8||toCol<0||toCol>8) continue;
         // 收集同列同类棋子
         const sources=[];
-        for (let r=0;r<ROWS;r++) if (board[r][fromCol]===pieceLetter) sources.push(r);
+        for (let r=0;r<ROWS;r++) if (state.board[r][fromCol]===pieceLetter) sources.push(r);
         if (!sources.length) continue;
         let chosenRows;
         if (sources.length>=2) {
@@ -114,7 +120,7 @@ function parseChineseNotation(text, side) {
 }
 
 // 从文本提取 4 字符坐标（支持 b2e2 / b2 e2 / b2-e2 / b2→e2 / b2至e2 等写法）
-function extractCoords(text) {
+export function extractCoords(text) {
     const res=[];
     if (!text) return res;
     const s = String(text).toLowerCase();
@@ -127,7 +133,7 @@ function extractCoords(text) {
 }
 
 // 多格式候选解析：JSON -> 坐标 -> 中文记谱
-function parseMoveCandidates(text, side) {
+export function parseMoveCandidates(text, side) {
     const out=[];
     const push=(arr,src)=>{ for(const mm of arr) out.push({fromRow:mm.fromRow,fromCol:mm.fromCol,toRow:mm.toRow,toCol:mm.toCol,source:src}); };
     // 1) JSON 对象（模型输出 {"move":"b2e2"}）
@@ -152,7 +158,7 @@ function parseMoveCandidates(text, side) {
 }
 
 // 解析编号（JSON choice 字段优先，其次裸数字，再其次汉字数字）
-function parseNumberChoice(text, maxIdx) {
+export function parseNumberChoice(text, maxIdx) {
     if (!text) return -1;
     const jstrs = String(text).match(/\{[\s\S]{0,200}?\}/g) || [];
     for (const js of jstrs) {
@@ -171,7 +177,7 @@ function parseNumberChoice(text, maxIdx) {
 }
 
 // 提取走棋风格声明（serious / mercy / creative）
-function extractSpirit(text) {
+export function extractSpirit(text) {
     if (!text) return 'serious';
     const jstrs = String(text).match(/\{[\s\S]{0,300}?\}/g) || [];
     for (const js of jstrs) {
