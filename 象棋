@@ -1,0 +1,1888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>中国象棋 · AI对战+智能聊天（DeepSeek V4 思考模型适配版）</title>
+    <style>
+        :root {
+            --bg: #f0e6d0;
+            --board-bg: #e8d5b0;
+            --line: #5a3e1b;
+            --red: #c0392b;
+            --black: #2c2c2c;
+            --panel-bg: #faf5e8;
+            --btn: #4a6b8a;
+            --btn-hover: #3a5a75;
+            --chat-bg: #f5f0e6;
+            --user-msg: #d4e6f1;
+            --ai-msg: #e0e0e0;
+            --border: #b8a88a;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        body {
+            background: var(--bg);
+            font-family: 'Segoe UI','PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif;
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; padding: 10px; user-select: none;
+            touch-action: manipulation;
+        }
+        .container {
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            max-width: 680px; width: 100%;
+        }
+        .panel {
+            background: var(--panel-bg); border-radius: 10px; padding: 10px 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.12); width: 100%;
+            display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+            justify-content: center; font-size: 14px;
+        }
+        .panel label { font-weight: 600; color: #444; }
+        .panel select, .panel input[type="text"], .panel input[type="password"], .panel input[type="number"] {
+            padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;
+            font-size: 13px; background: #fff; min-width: 60px; max-width: 180px;
+        }
+        .panel input[type="text"] { width: 160px; }
+        .panel input[type="number"] { width: 70px; }
+        .btn {
+            padding: 7px 16px; border: none; border-radius: 6px;
+            background: var(--btn); color: #fff; font-size: 14px;
+            cursor: pointer; font-weight: 600; transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .btn:hover { background: var(--btn-hover); }
+        .btn:disabled { background: #aaa; cursor: not-allowed; }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+        .btn-green { background: #2d7d46; }
+        .btn-green:hover { background: #256a3b; }
+        .btn-red { background: #c0392b; }
+        .btn-red:hover { background: #a93226; }
+        .status-bar {
+            display: flex; align-items: center; gap: 8px;
+            font-weight: 600; font-size: 15px; color: #333;
+            min-height: 24px; flex-wrap: wrap; justify-content: center;
+        }
+        .status-bar .badge {
+            padding: 3px 10px; border-radius: 12px; font-size: 13px;
+            font-weight: 700; color: #fff;
+        }
+        .badge-red { background: var(--red); }
+        .badge-black { background: var(--black); }
+        .badge-green { background: #2d7d46; }
+        .badge-gray { background: #777; }
+        canvas {
+            display: block; border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+            background: var(--board-bg);
+            cursor: pointer; max-width: 100%; height: auto;
+            touch-action: none;
+        }
+        .api-config-row {
+            display: flex; flex-wrap: wrap; gap: 6px;
+            align-items: center; justify-content: center;
+            width: 100%; font-size: 12px;
+        }
+        .api-config-row input { font-size: 12px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .api-config-row .hint { color: #888; font-size: 11px; }
+        .api-config-row select { font-size: 12px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .hidden { display: none !important; }
+        .log-area {
+            font-size: 12px; color: #666; max-height: 120px;
+            overflow-y: auto; text-align: left; width: 100%;
+            word-break: break-word; white-space: pre-wrap;
+            background: #f9f9f9; border-radius: 4px; padding: 4px;
+            border: 1px solid #ddd;
+        }
+        .chat-panel {
+            width: 100%; background: var(--chat-bg); border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            display: flex; flex-direction: column; max-height: 200px;
+            border: 1px solid var(--border);
+        }
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 8px 12px;
+            font-size: 13px; min-height: 60px; max-height: 140px;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .chat-msg {
+            padding: 5px 10px; border-radius: 10px;
+            max-width: 85%; word-break: break-word; line-height: 1.4;
+        }
+        .chat-msg.user { align-self: flex-end; background: var(--user-msg); border-bottom-right-radius: 2px; }
+        .chat-msg.ai { align-self: flex-start; background: var(--ai-msg); border-bottom-left-radius: 2px; }
+        .chat-msg.system { align-self: center; background: #f0e0b0; color: #555; font-size: 12px; }
+        .chat-input-row {
+            display: flex; gap: 6px; padding: 6px 8px;
+            border-top: 1px solid #ddd; background: #fff;
+            border-radius: 0 0 10px 10px;
+        }
+        .chat-input-row input[type="text"] {
+            flex: 1; padding: 6px 10px; border: 1px solid #ccc;
+            border-radius: 6px; font-size: 13px; outline: none;
+        }
+        .chat-input-row button {
+            padding: 6px 14px; border: none; border-radius: 6px;
+            background: var(--btn); color: #fff; cursor: pointer; font-weight: 600;
+        }
+        .chat-input-row button:hover { background: var(--btn-hover); }
+        @media (max-width: 480px) {
+            .panel { font-size: 12px; padding: 8px 10px; }
+            .btn { padding: 6px 10px; font-size: 12px; }
+            .panel input[type="text"] { width: 110px; font-size: 11px; }
+            .status-bar { font-size: 13px; }
+            .chat-panel { max-height: 180px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="status-bar" id="statusBar">
+        <span id="statusText">请选择执子方</span>
+        <span id="turnBadge" class="badge badge-gray">等待开始</span>
+    </div>
+
+    <div class="panel" id="controlPanel">
+        <label>执子方：</label>
+        <select id="sideSelect">
+            <option value="red">红方（先手）</option>
+            <option value="black">黑方（后手）</option>
+        </select>
+        <button class="btn btn-green" id="btnStart">开始游戏</button>
+        <button class="btn btn-red btn-sm" id="btnRestart">重新开始</button>
+        <button class="btn btn-sm" id="btnToggleApi">⚙ API设置</button>
+        <button class="btn btn-sm" id="btnCheat">🧙 摆棋作弊</button>
+    </div>
+
+    <div class="panel hidden" id="cheatPanel">
+        <label>作弊棋子：</label>
+        <select id="cheatPiece">
+            <option value="R">红车</option>
+            <option value="N">红马</option>
+            <option value="C">红炮</option>
+            <option value="P">红兵</option>
+            <option value="B">红相</option>
+            <option value="A">红仕</option>
+            <option value="r">黑车</option>
+            <option value="n">黑马</option>
+            <option value="c">黑炮</option>
+            <option value="p">黑卒</option>
+            <option value="b">黑象</option>
+            <option value="a">黑士</option>
+        </select>
+        <button class="btn btn-sm btn-green" id="btnCheatDone">完成</button>
+        <span class="hint">仅限你的回合：点击棋盘任意空格放置棋子，不占用走棋回合（帅/将不可添加）</span>
+    </div>
+
+    <div class="panel hidden" id="apiPanel">
+        <div class="api-config-row">
+            <label>Endpoint:</label>
+            <input type="text" id="apiEndpoint" placeholder="https://api.deepseek.com/v1/chat/completions" value="https://api.deepseek.com/v1/chat/completions">
+        </div>
+        <div class="api-config-row">
+            <label>API Key:</label>
+            <input type="password" id="apiKey" placeholder="sk-..." style="width:150px;">
+            <label>Model:</label>
+            <input type="text" id="apiModel" value="deepseek-v4-flash" style="width:130px;">
+        </div>
+        <div class="api-config-row">
+            <label>聊天MaxTokens:</label>
+            <input type="number" id="apiMaxTokens" value="1024" min="64" max="16384" style="width:70px;">
+            <label>走棋MaxTokens:</label>
+            <input type="number" id="apiMoveMaxTokens" value="4096" min="512" max="32768" style="width:90px;">
+            <label>Temperature:</label>
+            <input type="number" id="apiTemperature" value="0.3" min="0" max="2" step="0.1" style="width:60px;">
+        </div>
+        <div class="api-config-row">
+            <label>走棋思考模式：</label>
+            <select id="apiThinkingMode">
+                <option value="off">关闭（推荐，稳定快速）</option>
+                <option value="low">低思考（棋力略强，稍慢）</option>
+                <option value="high">高思考（棋力最强，很慢）</option>
+            </select>
+        </div>
+        <div class="api-config-row">
+            <label>
+                <input type="checkbox" id="apiForceMove"> 强制API走棋（失败时不回退本地）
+            </label>
+            <label>
+                <input type="checkbox" id="apiNumberMode"> 优先编号模式（全量候选兜底策略）
+            </label>
+            <label>
+                <input type="checkbox" id="apiEngineGuard" checked> 引擎护航（AI走法质量把关，防止送子）
+            </label>
+        </div>
+        <div class="api-config-row">
+            <label>聊天系统提示词：</label>
+            <input type="text" id="chatSystemPrompt"
+                   placeholder="例如：你是一位幽默的象棋解说员..."
+                   style="width:240px; font-size:12px;">
+        </div>
+        <div class="api-config-row hint">提示：低/高思考若被判定"思考超限"会自动降回关闭思考并由引擎护航兜底；关闭思考+引擎护航即可获得稳定且较强的棋力。</div>
+        <div class="api-config-row">
+            <button class="btn btn-sm btn-green" id="btnTestApi">测试API连接</button>
+            <button class="btn btn-sm" id="btnSaveApi">保存</button>
+            <button class="btn btn-sm" id="btnCloseApi">关闭</button>
+        </div>
+    </div>
+
+    <canvas id="boardCanvas"></canvas>
+    <div class="log-area" id="logArea"></div>
+
+    <div class="chat-panel">
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-msg system">💬 聊天室已开启，配置API后可与AI对话（AI知晓当前棋局）</div>
+        </div>
+        <div class="chat-input-row">
+            <input type="text" id="chatInput" placeholder="输入消息..." maxlength="500">
+            <button id="chatSendBtn">发送</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // ==================== 常量 ====================
+    const ROWS = 10, COLS = 9, EMPTY = '.';
+    const MAX_MOVE_TOKENS = 32768;
+    const THINK_BUDGET = 1200;   // 思考模式下的思考token硬上限（思考预算与max_tokens共享上限）
+    const PIECE_NAMES = { 'R':'车','N':'马','B':'相','A':'仕','K':'帅','C':'炮','P':'兵',
+        'r':'车','n':'马','b':'象','a':'士','k':'将','c':'炮','p':'卒' };
+    const PIECE_VALUES = { 'R':9,'N':4,'B':2,'A':2,'K':100,'C':4.5,'P':1,
+        'r':9,'n':4,'b':2,'a':2,'k':100,'c':4.5,'p':1 };
+    const isRed = ch => ch >= 'A' && ch <= 'Z';
+    const isBlack = ch => ch >= 'a' && ch <= 'z';
+    const sameSide = (a,b) => (isRed(a)&&isRed(b))||(isBlack(a)&&isBlack(b));
+    const COL_LETTERS = 'abcdefghi';
+
+    // 中文记谱工具
+    const CN_NUM = {'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+    const CN_NUM_REV = {1:'一',2:'二',3:'三',4:'四',5:'五',6:'六',7:'七',8:'八',9:'九'};
+    const CN_PIECE_KIND = { '车':'rook','马':'knight','炮':'cannon','兵':'pawn','卒':'pawn',
+        '相':'bishop','象':'bishop','仕':'advisor','士':'advisor','帅':'king','将':'king' };
+    const RED_PIECE_SET = { '车':'R','马':'N','炮':'C','兵':'P','相':'B','仕':'A','帅':'K' };
+    const BLACK_PIECE_SET = { '车':'r','马':'n','炮':'c','卒':'p','象':'b','士':'a','将':'k' };
+    function cnParse(n){ if(!n) return 0; if(CN_NUM[n]) return CN_NUM[n]; const i=parseInt(n); return (i>=1&&i<=9)?i:0; }
+
+    // ==================== DOM ====================
+    const canvas = document.getElementById('boardCanvas');
+    const ctx = canvas.getContext('2d');
+    const statusText = document.getElementById('statusText');
+    const turnBadge = document.getElementById('turnBadge');
+    const logArea = document.getElementById('logArea');
+    const sideSelect = document.getElementById('sideSelect');
+    const btnStart = document.getElementById('btnStart');
+    const btnRestart = document.getElementById('btnRestart');
+    const btnToggleApi = document.getElementById('btnToggleApi');
+    const apiPanel = document.getElementById('apiPanel');
+    const apiEndpoint = document.getElementById('apiEndpoint');
+    const apiKey = document.getElementById('apiKey');
+    const apiModel = document.getElementById('apiModel');
+    const apiMaxTokens = document.getElementById('apiMaxTokens');
+    const apiMoveMaxTokens = document.getElementById('apiMoveMaxTokens');
+    const apiTemperature = document.getElementById('apiTemperature');
+    const apiThinkingMode = document.getElementById('apiThinkingMode');
+    const apiForceMove = document.getElementById('apiForceMove');
+    const apiNumberMode = document.getElementById('apiNumberMode');
+    const apiEngineGuard = document.getElementById('apiEngineGuard');
+    const btnSaveApi = document.getElementById('btnSaveApi');
+    const btnCloseApi = document.getElementById('btnCloseApi');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const chatSendBtn = document.getElementById('chatSendBtn');
+    const chatSystemPromptInput = document.getElementById('chatSystemPrompt');
+    const btnTestApi = document.getElementById('btnTestApi');
+    const btnCheat = document.getElementById('btnCheat');
+    const btnCheatDone = document.getElementById('btnCheatDone');
+    const cheatPanel = document.getElementById('cheatPanel');
+    const cheatPiece = document.getElementById('cheatPiece');
+
+    // ==================== 游戏状态 ====================
+    let board = [];
+    let currentTurn = 'red';
+    let userSide = 'red';
+    let aiSide = 'black';
+    let gameStarted = false;
+    let gameOver = false;
+    let selectedPos = null;
+    let legalMovesForSelected = [];
+    let isAiThinking = false;
+    let lastMove = null;
+    let boardFlipped = false;
+    let cheatMode = false;
+    let chatHistory = [];
+    let moveHistory = [];
+    // AI心智状态（聊天室可影响走棋AI；每局重置）
+    let aiMind = { mercy: 0, risk: 0, mood: '平静' }; // mercy/risk 取值 0~3
+
+    // API配置
+    let apiConfig = {
+        endpoint: 'https://api.deepseek.com/v1/chat/completions',
+        key: '',
+        model: 'deepseek-v4-flash',
+        maxTokens: 1024,         // 聊天
+        moveMaxTokens: 4096,     // 走棋
+        temperature: 0.3,
+        thinkingMode: 'off',     // 'off' | 'low' | 'high'
+        forceMove: false,
+        numberMode: false,
+        engineGuard: true,
+        chatSystemPrompt: '你是中国象棋对局中的聊天伙伴，可以轻松聊天，也可以评论棋局。请用简短中文回复。'
+    };
+
+    // API 兼容性缓存：记住该 endpoint 实际接受哪些扩展参数
+    let apiCompat = null;              // {thinking, thinkingBudget, reasoningEffort, json, temperature, maxTokens}
+    let apiRejected = null;            // Set：已知被该接口 400 拒绝的参数名，后续请求直接跳过
+    let effMoveBudget = 0;             // 本局已验证有效的走棋 token 预算（每局重置）
+    let thoughtOffWarningLogged = false; // "关闭思考被接口忽略"提示只打一次
+    let autoThinkingOff = false;       // 本局思考模式已被判"过思考"，后续自动改用关闭思考
+
+    // 记录一次成功预算：取"本次用量的 1.2 倍"作为下一步起步，预防需求越来越高
+    function commitBudget(used) {
+        effMoveBudget = Math.min(MAX_MOVE_TOKENS, Math.max(effMoveBudget || 0, Math.ceil(used * 1.2)));
+    }
+
+    // 日志系统
+    let logLines = [];
+    function log(msg) {
+        const time = new Date().toLocaleTimeString('zh-CN', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        const line = `[${time}] ${msg}`;
+        console.log(`[象棋] ${msg}`);
+        logLines.push(line);
+        if (logLines.length > 80) logLines.shift();
+        logArea.textContent = logLines.join('\n');
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+
+    function shortStr(s, n) {
+        if (s === null || s === undefined) return '(空)';
+        const t = String(s).replace(/\s+/g, ' ').trim();
+        return t.length > n ? t.substring(0, n) + '…' : t;
+    }
+
+    // 加载配置（兼容旧版 v10 配置）
+    try {
+        let saved = localStorage.getItem('xiangqi_api_config_v11');
+        let oldVer = false;
+        if (!saved) { saved = localStorage.getItem('xiangqi_api_config_v10'); oldVer = true; }
+        if (saved) {
+            const p = JSON.parse(saved);
+            Object.assign(apiConfig, p);
+            if (oldVer) {
+                // 旧版 enableThinking=true 映射为 high 思考
+                apiConfig.thinkingMode = p.enableThinking ? 'high' : 'off';
+                if (!p.moveMaxTokens || p.moveMaxTokens < 1024) apiConfig.moveMaxTokens = 4096;
+                if (!p.maxTokens || p.maxTokens < 256) apiConfig.maxTokens = 1024;
+            }
+            apiEndpoint.value = apiConfig.endpoint || '';
+            apiKey.value = apiConfig.key || '';
+            apiModel.value = apiConfig.model || '';
+            apiMaxTokens.value = apiConfig.maxTokens || 1024;
+            apiMoveMaxTokens.value = apiConfig.moveMaxTokens || 4096;
+            apiTemperature.value = apiConfig.temperature !== undefined ? apiConfig.temperature : 0.3;
+            apiThinkingMode.value = apiConfig.thinkingMode || 'off';
+            apiForceMove.checked = !!apiConfig.forceMove;
+            apiNumberMode.checked = !!apiConfig.numberMode;
+            apiEngineGuard.checked = apiConfig.engineGuard !== false;
+            chatSystemPromptInput.value = apiConfig.chatSystemPrompt || '';
+        }
+    } catch(e) {}
+
+    // ==================== 棋盘初始化 ====================
+    function initBoard() {
+        board = [];
+        for (let r=0; r<ROWS; r++) board.push(new Array(COLS).fill(EMPTY));
+        board[0] = ['r','n','b','a','k','a','b','n','r'];
+        board[2] = [EMPTY,'c',EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,'c',EMPTY];
+        board[3] = ['p',EMPTY,'p',EMPTY,'p',EMPTY,'p',EMPTY,'p'];
+        board[6] = ['P',EMPTY,'P',EMPTY,'P',EMPTY,'P',EMPTY,'P'];
+        board[7] = [EMPTY,'C',EMPTY,EMPTY,EMPTY,EMPTY,EMPTY,'C',EMPTY];
+        board[9] = ['R','N','B','A','K','A','B','N','R'];
+    }
+
+    function boardToFEN() {
+        let fen = '';
+        for (let r=0; r<ROWS; r++) {
+            let empty=0;
+            for (let c=0; c<COLS; c++) {
+                if (board[r][c]===EMPTY) empty++;
+                else { if(empty>0){fen+=empty;empty=0;} fen+=board[r][c]; }
+            }
+            if(empty>0) fen+=empty;
+            if(r<ROWS-1) fen+='/';
+        }
+        return fen;
+    }
+
+    // ASCII 棋盘：面向模型，红方在下方（行0），列 a-i
+    function boardToAscii() {
+        const lines = ['    a   b   c   d   e   f   g   h   i'];
+        for (let r = 9; r >= 0; r--) {
+            let line = String(r) + '  ';
+            for (let c = 0; c < 9; c++) {
+                const p = board[r][c];
+                if (p === EMPTY) line += ' ·  ';
+                else line += (isRed(p) ? '红' : '黑') + PIECE_NAMES[p] + ' ';
+            }
+            lines.push(line.replace(/\s+$/,''));
+        }
+        lines.push('（红方在下方行0-4半场，黑方在上方行5-9半场；列号a在左侧）');
+        return lines.join('\n');
+    }
+
+    function posToStr(r,c) { return COL_LETTERS[c]+r; }
+    function strToPos(s) {
+        const clean = String(s).replace(/[^a-zA-Z0-9]/g, '');
+        if(clean.length!==4) return null;
+        const c1 = COL_LETTERS.indexOf(clean[0].toLowerCase());
+        const r1 = parseInt(clean[1]);
+        const c2 = COL_LETTERS.indexOf(clean[2].toLowerCase());
+        const r2 = parseInt(clean[3]);
+        if(c1===-1 || c2===-1 || isNaN(r1) || isNaN(r2)) return null;
+        if(r1<0||r1>9||r2<0||r2>9||c1<0||c1>8||c2<0||c2>8) return null;
+        return { fromRow:r1, fromCol:c1, toRow:r2, toCol:c2 };
+    }
+    function moveToStr(fr,fc,tr,tc) { return COL_LETTERS[fc]+fr+COL_LETTERS[tc]+tr; }
+
+    // ==================== 走法生成（完整规则引擎） ====================
+    function inBoard(r,c) { return r>=0&&r<ROWS&&c>=0&&c<COLS; }
+    function inRedPalace(r,c){ return r>=7&&r<=9&&c>=3&&c<=5; }
+    function inBlackPalace(r,c){ return r>=0&&r<=2&&c>=3&&c<=5; }
+
+    function isAttackedBy(bs,tr,tc,attackerSide) {
+        for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+            const p=bs[r][c]; if(p===EMPTY) continue;
+            const pRed=isRed(p);
+            if((attackerSide==='red'&&!pRed)||(attackerSide==='black'&&pRed)) continue;
+            if(canPieceAttack(bs,r,c,tr,tc,p)) return true;
+        }
+        return false;
+    }
+
+    function canPieceAttack(bs,fr,fc,tr,tc,p) {
+        if(fr===tr&&fc===tc) return false;
+        const pl=p.toLowerCase(), pred=isRed(p);
+        switch(pl) {
+            case 'r': return canRookMove(bs,fr,fc,tr,tc);
+            case 'n': return canKnightMove(bs,fr,fc,tr,tc);
+            case 'b': return canBishopMove(bs,fr,fc,tr,tc,pred);
+            case 'a': return canAdvisorMove(bs,fr,fc,tr,tc,pred);
+            case 'k': return canKingMove(bs,fr,fc,tr,tc,pred);
+            case 'c': return canCannonMove(bs,fr,fc,tr,tc);
+            case 'p': return canPawnMove(bs,fr,fc,tr,tc,pred);
+        }
+        return false;
+    }
+    function canRookMove(bs,fr,fc,tr,tc) {
+        if(fr!==tr&&fc!==tc) return false;
+        const dr=Math.sign(tr-fr), dc=Math.sign(tc-fc);
+        let r=fr+dr,c=fc+dc;
+        while(r!==tr||c!==tc){ if(!inBoard(r,c)||bs[r][c]!==EMPTY) return false; r+=dr;c+=dc; }
+        return true;
+    }
+    function canKnightMove(bs,fr,fc,tr,tc) {
+        const dr=Math.abs(tr-fr), dc=Math.abs(tc-fc);
+        if(!((dr===2&&dc===1)||(dr===1&&dc===2))) return false;
+        let br,bc;
+        if(dr===2){ br=fr+Math.sign(tr-fr); bc=fc; } else { br=fr; bc=fc+Math.sign(tc-fc); }
+        return bs[br][bc]===EMPTY;
+    }
+    function canBishopMove(bs,fr,fc,tr,tc,pred) {
+        const dr=Math.abs(tr-fr), dc=Math.abs(tc-fc);
+        if(dr!==2||dc!==2) return false;
+        if(pred&&tr<5) return false; if(!pred&&tr>4) return false;
+        const er=(fr+tr)/2, ec=(fc+tc)/2;
+        return bs[er][ec]===EMPTY;
+    }
+    function canAdvisorMove(bs,fr,fc,tr,tc,pred) {
+        const dr=Math.abs(tr-fr), dc=Math.abs(tc-fc);
+        if(dr!==1||dc!==1) return false;
+        return pred?inRedPalace(tr,tc):inBlackPalace(tr,tc);
+    }
+    function canKingMove(bs,fr,fc,tr,tc,pred) {
+        const dr=Math.abs(tr-fr), dc=Math.abs(tc-fc);
+        if(dr+dc!==1) return false;
+        return pred?inRedPalace(tr,tc):inBlackPalace(tr,tc);
+    }
+    function canCannonMove(bs,fr,fc,tr,tc) {
+        if(fr!==tr&&fc!==tc) return false;
+        const dr=Math.sign(tr-fr), dc=Math.sign(tc-fc);
+        let r=fr+dr,c=fc+dc,jumped=false;
+        while(r!==tr||c!==tc){ if(!inBoard(r,c)) return false; if(bs[r][c]!==EMPTY){ if(jumped)return false; jumped=true;} r+=dr;c+=dc; }
+        if(bs[tr][tc]===EMPTY) return !jumped; else return jumped;
+    }
+    function canPawnMove(bs,fr,fc,tr,tc,pred) {
+        const dr=tr-fr, dc=Math.abs(tc-fc);
+        if(pred){ if(dr===-1&&dc===0) return true; if(fr<=4&&dr===0&&dc===1) return true; }
+        else { if(dr===1&&dc===0) return true; if(fr>=5&&dr===0&&dc===1) return true; }
+        return false;
+    }
+
+    function getAllLegalMoves(bs,side) {
+        const moves=[];
+        for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+            const p=bs[r][c]; if(p===EMPTY) continue;
+            const pred=isRed(p);
+            if((side==='red'&&!pred)||(side==='black'&&pred)) continue;
+            const ms=getPieceLegalMoves(bs,r,c,p);
+            for(const m of ms) moves.push({fromRow:r,fromCol:c,toRow:m.toRow,toCol:m.toCol});
+        }
+        return moves;
+    }
+    function getPieceLegalMoves(bs,row,col,piece) {
+        const res=[];
+        const pred=isRed(piece), side=pred?'red':'black';
+        for(let tr=0;tr<ROWS;tr++) for(let tc=0;tc<COLS;tc++) {
+            if(tr===row&&tc===col) continue;
+            const target=bs[tr][tc];
+            if(target!==EMPTY&&sameSide(target,piece)) continue;
+            if(!canPieceAttack(bs,row,col,tr,tc,piece)) continue;
+            const nb=cloneBoard(bs);
+            nb[tr][tc]=piece; nb[row][col]=EMPTY;
+            const kp=findKing(nb,side);
+            if(!kp) continue;
+            if(isAttackedBy(nb,kp.row,kp.col,side==='red'?'black':'red')) continue;
+            if(kingsFacing(nb)) continue;
+            res.push({toRow:tr,toCol:tc});
+        }
+        return res;
+    }
+    function cloneBoard(bs){ return bs.map(row=>[...row]); }
+    function findKing(bs,side){ const ch=side==='red'?'K':'k'; for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(bs[r][c]===ch) return {row:r,col:c}; return null; }
+    function kingsFacing(bs){ const rk=findKing(bs,'red'), bk=findKing(bs,'black'); if(!rk||!bk) return false; if(rk.col!==bk.col) return false; const min=Math.min(rk.row,bk.row),max=Math.max(rk.row,bk.row); for(let r=min+1;r<max;r++) if(bs[r][rk.col]!==EMPTY) return false; return true; }
+    function isInCheck(bs,side){ const kp=findKing(bs,side); if(!kp) return true; const attacker=side==='red'?'black':'red'; return isAttackedBy(bs,kp.row,kp.col,attacker); }
+    function isCheckmate(bs,side){ return isInCheck(bs,side) && getAllLegalMoves(bs,side).length===0; }
+    function isStalemate(bs,side){ return !isInCheck(bs,side) && getAllLegalMoves(bs,side).length===0; }
+    function isValidMove(bs,fr,fc,tr,tc,side){
+        if(!inBoard(fr,fc)||!inBoard(tr,tc)) return false;
+        const p=bs[fr][fc]; if(p===EMPTY) return false;
+        const pred=isRed(p); if((side==='red'&&!pred)||(side==='black'&&pred)) return false;
+        const target=bs[tr][tc]; if(target!==EMPTY&&sameSide(target,p)) return false;
+        if(!canPieceAttack(bs,fr,fc,tr,tc,p)) return false;
+        const nb=cloneBoard(bs); nb[tr][tc]=p; nb[fr][fc]=EMPTY;
+        if(kingsFacing(nb)) return false;
+        const kp=findKing(nb,side); if(!kp) return false;
+        if(isAttackedBy(nb,kp.row,kp.col,side==='red'?'black':'red')) return false;
+        return true;
+    }
+
+    // ==================== 执行走法 ====================
+    function executeMove(fr,fc,tr,tc) {
+        const piece=board[fr][fc]; const captured=board[tr][tc];
+        const cnBefore = moveToChinese(fr,fc,tr,tc, piece); // 必须在落子前计算
+        board[tr][tc]=piece; board[fr][fc]=EMPTY;
+        lastMove={fromRow:fr,fromCol:fc,toRow:tr,toCol:tc};
+        if(captured!==EMPTY) log(`吃子: ${PIECE_NAMES[captured]}`);
+        const side = isRed(piece) ? '红方' : '黑方';
+        const moveDesc = `${side} ${PIECE_NAMES[piece]} ${cnBefore||''} (${moveToStr(fr,fc,tr,tc)})`;
+        moveHistory.push(moveDesc);
+        if (moveHistory.length > 20) moveHistory.shift();
+        return {piece,captured};
+    }
+
+    // ==================== 中文记谱 <-> 坐标 双向转换 ====================
+    // 把一步棋转成中文记谱（如 炮二平五 / 马八进七 / 前车进一）
+    // pieceOverride：棋盘已落子后调用时传入落子棋子，避免原位置为空导致返回空串
+    function moveToChinese(fr,fc,tr,tc, pieceOverride) {
+        const piece = pieceOverride !== undefined ? pieceOverride : board[fr][fc];
+        if (!piece) return '';
+        const side = isRed(piece) ? 'red' : 'black';
+        const pieceCh = PIECE_NAMES[piece]; // 车/马/炮/兵/卒/相/象/仕/士/帅/将
+        const kind = CN_PIECE_KIND[pieceCh];
+        const numToStr = side==='red' ? (n=>CN_NUM_REV[n]) : (n=>String(n));
+        const fromColNum = side==='red' ? 9-fc : fc+1;
+        const toColNum = side==='red' ? 9-tc : tc+1;
+        // 前缀：同列同类型子
+        let cnt=0, rows=[];
+        for (let r=0;r<ROWS;r++) if (board[r][fc]===piece) { cnt++; rows.push(r); }
+        let prefix='';
+        if (cnt>=2) {
+            if (cnt===2) {
+                const isFront = side==='red' ? fr===Math.min(...rows) : fr===Math.max(...rows);
+                prefix = isFront ? '前' : '后';
+            } else {
+                const sorted = side==='red' ? [...rows].sort((a,b)=>a-b) : [...rows].sort((a,b)=>b-a);
+                prefix = numToStr(sorted.indexOf(fr)+1);
+            }
+        }
+        let action='', target='';
+        if (kind==='pawn') {
+            if (tc!==fc) { action='平'; target=numToStr(toColNum); }
+            else { action='进'; target=numToStr(1); }
+        } else if (kind==='rook'||kind==='cannon'||kind==='king') {
+            if (tc===fc) {
+                const steps = Math.abs(tr-fr);
+                const fwd = (tr-fr) * (side==='red'?-1:1);
+                action = fwd>0 ? '进' : '退';
+                target = numToStr(steps);
+            } else { action='平'; target=numToStr(toColNum); }
+        } else { // 马 相 士
+            const fwd = (tr-fr) * (side==='red'?-1:1);
+            action = fwd>0 ? '进' : '退';
+            target = numToStr(toColNum);
+        }
+        return prefix + pieceCh + numToStr(fromColNum) + action + target;
+    }
+
+    // 从任意文本中解析中文记谱，返回候选走法列表（未做合法性过滤）
+    function parseChineseNotation(text, side) {
+        const results = [];
+        if (!text) return results;
+        const pattern = /(前|后|[一二三四五])?(车|马|炮|兵|卒|相|象|仕|士|帅|将)([一二三四五六七八九1-9])(进|退|平)([一二三四五六七八九1-9])/g;
+        const pieceSetMap = side==='red' ? RED_PIECE_SET : BLACK_PIECE_SET;
+        const forward = side==='red' ? -1 : 1;
+        let m;
+        while ((m = pattern.exec(text)) !== null) {
+            const prefix = m[1] || '';
+            const pieceCh = m[2];
+            const fromColNum = cnParse(m[3]);
+            const action = m[4];
+            const toNum = cnParse(m[5]);
+            if (!fromColNum || !toNum) continue;
+            const pieceLetter = pieceSetMap[pieceCh];
+            if (!pieceLetter) continue; // 该字不是本方的棋子字（如红方不会写"将5进1"）
+            const fromCol = side==='red' ? 9-fromColNum : fromColNum-1;
+            const toCol = side==='red' ? 9-toNum : toNum-1;
+            if (fromCol<0||fromCol>8||toCol<0||toCol>8) continue;
+            // 收集同列同类棋子
+            const sources=[];
+            for (let r=0;r<ROWS;r++) if (board[r][fromCol]===pieceLetter) sources.push(r);
+            if (!sources.length) continue;
+            let chosenRows;
+            if (sources.length>=2) {
+                if (prefix==='前') chosenRows=[ side==='red' ? Math.min(...sources) : Math.max(...sources) ];
+                else if (prefix==='后') chosenRows=[ side==='red' ? Math.max(...sources) : Math.min(...sources) ];
+                else if (prefix) {
+                    const idx = CN_NUM[prefix];
+                    const sorted = side==='red' ? [...sources].sort((a,b)=>a-b) : [...sources].sort((a,b)=>b-a);
+                    chosenRows = (idx && idx<=sorted.length) ? [sorted[idx-1]] : [];
+                } else chosenRows = sources; // 无前缀则全部作为候选，交给合法过滤
+            } else chosenRows = sources;
+            const kind = CN_PIECE_KIND[pieceCh];
+            for (const fr of chosenRows) {
+                const cands=[];
+                if (kind==='rook'||kind==='cannon'||kind==='king') {
+                    if (action==='平') cands.push([fr,toCol]);
+                    else if (action==='进') cands.push([fr+forward*toNum, fromCol]);
+                    else cands.push([fr-forward*toNum, fromCol]);
+                } else if (kind==='knight'||kind==='bishop'||kind==='advisor') {
+                    const dr = action==='进' ? forward : -forward;
+                    const steps = kind==='knight' ? [1,2] : (kind==='bishop' ? [2] : [1]);
+                    for (const s of steps) cands.push([fr+dr*s, toCol]);
+                } else if (kind==='pawn') {
+                    if (action==='进' && toNum===1) cands.push([fr+forward, fromCol]);
+                    else if (action==='平') cands.push([fr, toCol]);
+                }
+                for (const [tr,tc] of cands) {
+                    if (inBoard(tr,tc)) results.push({fromRow:fr,fromCol,toRow:tr,toCol:tc});
+                }
+            }
+        }
+        return results;
+    }
+
+    // 从文本提取 4 字符坐标（支持 b2e2 / b2 e2 / b2-e2 / b2→e2 / b2至e2 等写法）
+    function extractCoords(text) {
+        const res=[];
+        if (!text) return res;
+        const s = String(text).toLowerCase();
+        let m;
+        const re1=/[a-i][0-9][a-i][0-9]/g;
+        while ((m=re1.exec(s))!==null){ const p=strToPos(m[0]); if(p) res.push(p); }
+        const re2=/([a-i])([0-9])\s*(?:[-—–→⇒至到,，.。\s]|to){1,3}\s*([a-i])([0-9])/g;
+        while ((m=re2.exec(s))!==null){ const p=strToPos(m[1]+m[2]+m[3]+m[4]); if(p) res.push(p); }
+        return res;
+    }
+
+    // 多格式候选解析：JSON -> 坐标 -> 中文记谱
+    function parseMoveCandidates(text, side) {
+        const out=[];
+        const push=(arr,src)=>{ for(const mm of arr) out.push({fromRow:mm.fromRow,fromCol:mm.fromCol,toRow:mm.toRow,toCol:mm.toCol,source:src}); };
+        // 1) JSON 对象（模型输出 {"move":"b2e2"}）
+        const jstrs = String(text||'').match(/\{[\s\S]{0,400}?\}/g) || [];
+        for (const js of jstrs) {
+            try {
+                const obj = JSON.parse(js);
+                const vals=[obj.move, obj.coord, obj.coordinate, obj.uci, obj.answer];
+                for (const v of vals) {
+                    if (typeof v==='string' && v.trim()) {
+                        push(extractCoords(v), 'JSON');
+                        push(parseChineseNotation(v, side), 'JSON中文记谱');
+                    }
+                }
+            } catch(e) {}
+        }
+        // 2) 纯坐标
+        push(extractCoords(text), '坐标');
+        // 3) 中文记谱
+        push(parseChineseNotation(text, side), '中文记谱');
+        return out;
+    }
+
+    // 解析编号（JSON choice 字段优先，其次裸数字，再其次汉字数字）
+    function parseNumberChoice(text, maxIdx) {
+        if (!text) return -1;
+        const jstrs = String(text).match(/\{[\s\S]{0,200}?\}/g) || [];
+        for (const js of jstrs) {
+            try {
+                const o = JSON.parse(js);
+                const n = parseInt(o.choice ?? o.index ?? o.answer ?? o.move);
+                if (n>=1 && n<=maxIdx) return n-1;
+            } catch(e) {}
+        }
+        const mm = String(text).match(/\d+/);
+        if (mm) { const n=parseInt(mm[0]); if (n>=1 && n<=maxIdx) return n-1; }
+        for (const k in CN_NUM) {
+            if (String(text).includes(k)) { const n=CN_NUM[k]; if (n>=1 && n<=maxIdx) return n-1; }
+        }
+        return -1;
+    }
+
+    // 提取走棋风格声明（serious / mercy / creative）
+    function extractSpirit(text) {
+        if (!text) return 'serious';
+        const jstrs = String(text).match(/\{[\s\S]{0,300}?\}/g) || [];
+        for (const js of jstrs) {
+            try {
+                const o = JSON.parse(js);
+                const s = o.spirit || o.style;
+                if (s==='mercy' || s==='creative' || s==='serious') return s;
+            } catch(e) {}
+        }
+        return 'serious';
+    }
+
+    // ==================== 本地AI（兜底，带基本评估） ====================
+    function localAiMove(side) {
+        const moves=getAllLegalMoves(board,side);
+        if(moves.length===0) return null;
+        const opp = side==='red' ? 'black' : 'red';
+        let best=null, bestScore=-1e9;
+        for(const m of moves){
+            let s=0;
+            const piece=board[m.fromRow][m.fromCol];
+            const target=board[m.toRow][m.toCol];
+            if(target!==EMPTY) s += (PIECE_VALUES[target]||0)*10;           // 吃子
+            const nb=cloneBoard(board); nb[m.toRow][m.toCol]=piece; nb[m.fromRow][m.fromCol]=EMPTY;
+            if(isInCheck(nb,opp)) s += 4;                                    // 将军
+            if(isAttackedBy(board,m.toRow,m.toCol,opp)) s -= (PIECE_VALUES[piece]||1)*6; // 落点风险
+            s += (side==='red' ? (m.fromRow-m.toRow) : (m.toRow-m.fromRow))*0.1;        // 前进
+            s += (4-Math.abs(m.toCol-4))*0.05;                               // 中央
+            if(lastMove && lastMove.toRow===m.fromRow && lastMove.toCol===m.fromCol
+               && lastMove.fromRow===m.toRow && lastMove.fromCol===m.toCol) s -= 3;     // 避免来回走
+            s += Math.random()*0.4;
+            if(s>bestScore){ bestScore=s; best=m; }
+        }
+        return best;
+    }
+
+    // ==================== 内置搜索引擎（α-β剪枝 + 静态评估 + 吃子静态搜索） ====================
+    const SEARCH_MATE = 1000000;
+    const SEARCH_INF = 100000000;
+    const GUARD_MARGIN = 150;          // 护航容差（厘兵）：AI走法比引擎最优差不超150cp即采用
+    const SEARCH_NODE_LIMIT = 300000;  // 节点上限，保证毫秒级
+    let searchNodes = 0;
+
+    // 静态评估（红方视角，单位：厘兵）
+    function evalBoard(bs) {
+        let score = 0;
+        for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+            const p = bs[r][c]; if (p===EMPTY) continue;
+            const pl = p.toLowerCase();
+            const mat = (PIECE_VALUES[p]||0)*100;
+            let pos = 0;
+            if (pl==='p') {
+                pos = isRed(p) ? (9-r)*6 + (r<=4?8:0) : r*6 + (r>=5?8:0);
+            } else if (pl==='n') {
+                pos = 12 - Math.min(r,9-r)*2 - Math.abs(c-4)*2;
+            } else if (pl==='b' || pl==='a') {
+                pos = 5 - Math.abs(c-4);
+            } else if (pl==='r') {
+                pos = 5 - Math.abs(c-4);
+            } else if (pl==='c') {
+                pos = 4 - Math.abs(c-4);
+            } else if (pl==='k') {
+                pos = isRed(p) ? (r<7 ? -15 : 5 - Math.abs(c-4)) : (r>2 ? -15 : 5 - Math.abs(c-4));
+            }
+            if (isRed(p)) score += mat + pos; else score -= mat + pos;
+        }
+        return score;
+    }
+
+    // 走法排序：吃子优先（MVV-LVA）
+    function orderMoves(bs, moves) {
+        const sc = m => {
+            const t = bs[m.toRow][m.toCol];
+            return t!==EMPTY ? (PIECE_VALUES[t]||0)*10 - (PIECE_VALUES[bs[m.fromRow][m.fromCol]]||0)*0.01 : 0;
+        };
+        return moves.map(m=>({m,s:sc(m)})).sort((a,b)=>b.s-a.s).map(o=>o.m);
+    }
+
+    function quiescence(bs, alpha, beta, side) {
+        searchNodes++;
+        const stand = (side==='red' ? 1 : -1) * evalBoard(bs);
+        if (stand >= beta) return beta;
+        if (stand > alpha) alpha = stand;
+        let caps = getAllLegalMoves(bs, side).filter(m => bs[m.toRow][m.toCol] !== EMPTY);
+        caps = orderMoves(bs, caps);
+        for (const m of caps) {
+            if (searchNodes > SEARCH_NODE_LIMIT) break;
+            const nb = cloneBoard(bs);
+            nb[m.toRow][m.toCol]=nb[m.fromRow][m.fromCol]; nb[m.fromRow][m.fromCol]=EMPTY;
+            const sc = -quiescence(nb, -beta, -alpha, side==='red'?'black':'red');
+            if (sc >= beta) return beta;
+            if (sc > alpha) alpha = sc;
+        }
+        return alpha;
+    }
+
+    function alphaBeta(bs, depth, alpha, beta, side, ply) {
+        searchNodes++;
+        const opp = side==='red'?'black':'red';
+        const moves = getAllLegalMoves(bs, side);
+        if (moves.length===0) {
+            return isInCheck(bs, side) ? -(SEARCH_MATE - ply) : 0;
+        }
+        if (depth<=0) return quiescence(bs, alpha, beta, side);
+        const ordered = orderMoves(bs, moves);
+        let best = -SEARCH_INF;
+        for (const m of ordered) {
+            if (searchNodes > SEARCH_NODE_LIMIT) break;
+            const nb = cloneBoard(bs);
+            nb[m.toRow][m.toCol]=nb[m.fromRow][m.fromCol]; nb[m.fromRow][m.fromCol]=EMPTY;
+            const sc = -alphaBeta(nb, depth-1, -beta, -alpha, opp, ply+1);
+            if (sc > best) best = sc;
+            if (best > alpha) alpha = best;
+            if (alpha >= beta) break;
+        }
+        return best;
+    }
+
+    // 搜索最佳走法（返回 {move, score}，score为走完该步后己方视角的评估值）
+    function searchBestMove(bs, side) {
+        const moves = getAllLegalMoves(bs, side);
+        if (moves.length===0) return null;
+        const depth = moves.length <= 8 ? 4 : 3;
+        searchNodes = 0;
+        const opp = side==='red'?'black':'red';
+        let best = null, alpha = -SEARCH_INF;
+        for (const m of orderMoves(bs, moves)) {
+            if (searchNodes > SEARCH_NODE_LIMIT) break;
+            const nb = cloneBoard(bs);
+            nb[m.toRow][m.toCol]=nb[m.fromRow][m.fromCol]; nb[m.fromRow][m.fromCol]=EMPTY;
+            const sc = -alphaBeta(nb, depth-1, -SEARCH_INF, -alpha, opp, 1);
+            if (sc > alpha) { alpha = sc; best = m; }
+        }
+        return best ? { move: best, score: alpha } : { move: moves[0], score: 0 };
+    }
+
+    // 引擎护航：AI自由选点若明显劣于引擎最优则纠正；但AI可依"心智状态"选择性无视纠正（放水/任性）
+    function engineGuard(llmMove, side, spirit) {
+        const moves = getAllLegalMoves(board, side);
+        const depth = moves.length <= 8 ? 4 : 3;
+        const eng = searchBestMove(board, side);
+        if (!eng) return null;
+        if (!llmMove) { log('引擎接管（AI未给出有效走法）'); return eng.move; }
+        const opp = side==='red'?'black':'red';
+        const nb = cloneBoard(board);
+        nb[llmMove.toRow][llmMove.toCol]=nb[llmMove.fromRow][llmMove.fromCol];
+        nb[llmMove.fromRow][llmMove.fromCol]=EMPTY;
+        const llmVal = -alphaBeta(nb, depth-1, -SEARCH_INF, SEARCH_INF, opp, 1);
+        const m = aiMind.mercy, r = aiMind.risk;
+        const margin = GUARD_MARGIN + m*250 + r*200;           // 放水/任性越大，容忍越差的走法
+        if (llmVal >= eng.score - margin) return llmMove;       // 质量过关
+        // "任性权"：AI依状态与spirit决定无视引擎纠正（偶尔自发的小任性3%）
+        const spiritSoft = spirit==='mercy' || spirit==='creative';
+        const stateOverride = (m>0 || r>0) && (spiritSoft || Math.random() < 0.25*m + 0.2*r);
+        const spontaneous = Math.random() < 0.03;
+        const forcedMateLoss = llmVal <= -(SEARCH_MATE - 100);  // 引擎算出必败连杀则不任性
+        if (!forcedMateLoss && (stateOverride || spontaneous)) {
+            log(`⚠ AI行使"任性权"（spirit:${spirit||'未声明'}，放水${m} 任性${r}）：无视引擎纠正，采用自选走法（评估${llmVal}cp vs 最优${eng.score}cp）`);
+            return llmMove;
+        }
+        log(`引擎纠错：AI走法评估${llmVal}cp，引擎最优${eng.score}cp（差${eng.score-llmVal}cp），改用引擎走法`);
+        return eng.move;
+    }
+
+    // 放水兜底：AI没有给出走法时，按放水/任性程度在"次优窗口"内随机选择（否则选最优）
+    function softPickMove(side) {
+        const eng = searchBestMove(board, side);
+        if (!eng) return null;
+        const m = aiMind.mercy, r = aiMind.risk;
+        if (m===0 && r===0) return eng.move;
+        const win = m*120 + r*80; // 容忍窗口（厘兵）
+        const moves = getAllLegalMoves(board, side);
+        const depth = moves.length <= 8 ? 4 : 3;
+        const opp = side==='red'?'black':'red';
+        let bestV = -SEARCH_INF;
+        const scored = [];
+        for (const mv of moves) {
+            const nb = cloneBoard(board);
+            nb[mv.toRow][mv.toCol]=nb[mv.fromRow][mv.fromCol]; nb[mv.fromRow][mv.fromCol]=EMPTY;
+            const v = -alphaBeta(nb, depth-1, -SEARCH_INF, SEARCH_INF, opp, 1);
+            scored.push({mv,v});
+            if (v > bestV) bestV = v;
+        }
+        const pool = scored.filter(x => x.v >= bestV - win);
+        const pick = pool[Math.floor(Math.random()*pool.length)].mv;
+        log(`（放水兜底：在最优${bestV}cp附近${win}cp窗口内随机选择，共${pool.length}个候选）`);
+        return pick;
+    }
+
+    // ==================== API 调用核心（DeepSeek V4 思考模型适配） ====================
+    function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+    // 从 400 错误文本中提取被拒绝的参数名（如 "Invalid parameter: thinking"）
+    function extractRejectedKey(errText) {
+        if (!errText) return null;
+        const known = ['thinking_budget','reasoning_effort','response_format','thinking','temperature','max_tokens','max_completion_tokens','top_p'];
+        const low = String(errText).toLowerCase();
+        for (const k of known) if (low.includes(k)) return k;
+        const q = String(errText).match(/["“'']([a-z_]{3,40})["”'']/i);
+        return q ? q[1] : null;
+    }
+
+    // 构建参数变体：缓存允许集 -> 全量 -> 逐步剥离 -> 最简。
+    // 用于兼容不支持 thinking / response_format 等扩展参数的接口。
+    function buildParamVariants(model, messages, opt) {
+        const base = { model, messages };
+        const rejected = apiRejected ? new Set(apiRejected) : new Set();
+        if (opt.maxTokens) {
+            if (rejected.has('max_tokens')) base.max_completion_tokens = opt.maxTokens;
+            else base.max_tokens = opt.maxTokens;
+        }
+        const extra = []; // [key, value] 列表，保持顺序
+        if (opt.thinking === 'off') {
+            extra.push(['thinking', { type: 'disabled' }]);
+        } else if (opt.thinking === 'low' || opt.thinking === 'high') {
+            extra.push(['thinking', { type: 'enabled' }]);
+            extra.push(['reasoning_effort', opt.thinking]);
+            if (opt.thinkingBudget > 0) extra.push(['thinking_budget', opt.thinkingBudget]);
+        }
+        if (opt.jsonMode) extra.push(['response_format', { type: 'json_object' }]);
+        if (opt.temperature !== undefined && opt.temperature !== null) extra.push(['temperature', opt.temperature]);
+
+        // 过滤已知被拒绝的参数
+        const usable = extra.filter(([k]) => !rejected.has(k));
+        const variants = [];
+        const allowed = apiCompat ? new Set(Object.keys(apiCompat)) : null;
+        const makeBody = (keys) => {
+            const b = Object.assign({}, base);
+            for (const [k,v] of usable) if (keys.has(k)) b[k] = v;
+            return b;
+        };
+        const allKeys = new Set(usable.map(e=>e[0]));
+        if (allowed) {
+            const cachedKeys = new Set([...allowed].filter(k => allKeys.has(k)));
+            variants.push(makeBody(cachedKeys));
+        }
+        variants.push(makeBody(allKeys));
+        for (let drop=0; drop<usable.length; drop++) {
+            const kept = new Set(usable.slice(0, usable.length-drop).map(e=>e[0]));
+            variants.push(makeBody(kept));
+        }
+        variants.push(makeBody(new Set()));
+        const seen=new Set(), dedup=[];
+        for (const b of variants) {
+            const key=JSON.stringify(b);
+            if(!seen.has(key)){ seen.add(key); dedup.push(b); }
+        }
+        return dedup;
+    }
+
+    function looksLikeParamError(status, errText) {
+        if (!(status===400||status===404||status===422)) return false;
+        if (/model/i.test(errText) && /(not exist|not found|does not exist|不存在|invalid model|unknown model)/i.test(errText)) {
+            return 'MODEL'; // 模型名错误：剥离参数也无用
+        }
+        if (/unknown|invalid|unrecognized|unexpected|unsupported|not support|extra|additional|参数|不认识|不支持/i.test(errText)) return 'PARAM';
+        return 'OTHER';
+    }
+
+    function extractResponse(data) {
+        const choice = data && data.choices && data.choices[0];
+        let content='', reasoning='';
+        if (choice) {
+            const msg = choice.message || {};
+            let c = msg.content !== undefined ? msg.content : choice.text;
+            if (Array.isArray(c)) c = c.map(part => part && typeof part==='object' ? (part.text||'') : String(part)).join('');
+            content = (c === null || c === undefined) ? '' : String(c);
+            reasoning = msg.reasoning_content || '';
+            if (!reasoning && typeof msg.thinking === 'string') reasoning = msg.thinking;
+            if (!reasoning && msg.thinking && typeof msg.thinking === 'object' && msg.thinking.text) reasoning = msg.thinking.text;
+        }
+        if (!content && data && typeof data.output_text === 'string') content = data.output_text;
+        if (!content && data && typeof data.output === 'string') content = data.output;
+        if (!content && data && data.result && typeof data.result === 'string') content = data.result;
+        return {
+            content: String(content||'').trim(),
+            reasoning: String(reasoning||'').trim(),
+            finishReason: choice ? choice.finish_reason : undefined,
+            usage: data && data.usage ? data.usage : null
+        };
+    }
+
+    /**
+     * 统一 API 调用入口。
+     * options: {
+     *   maxTokens, temperature, jsonMode, thinking('off'|'low'|'high'|'default'),
+     *   thinkingBudget, timeout(毫秒)
+     * }
+     * 返回 { content, reasoning, finishReason, usage }
+     */
+    async function callApi(messages, options = {}) {
+        const endpoint = apiConfig.endpoint.trim();
+        const key = apiConfig.key.trim();
+        const model = apiConfig.model.trim();
+        if (!endpoint || !model) throw new Error('API未配置（endpoint或model为空）');
+
+        const opt = {
+            maxTokens: options.maxTokens || apiConfig.maxTokens || 300,
+            temperature: options.temperature,
+            jsonMode: !!options.jsonMode,
+            thinking: options.thinking || 'default',
+            thinkingBudget: options.thinkingBudget || 0,
+            timeout: options.timeout || 90000
+        };
+        const variants = buildParamVariants(model, messages, opt);
+        let lastErr = null;
+        let rateLimitedOnce = false;
+
+        for (const body of variants) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (key) headers['Authorization'] = 'Bearer ' + key;
+            const controller = new AbortController();
+            const timer = setTimeout(()=>controller.abort(), opt.timeout);
+            try {
+                const resp = await fetch(endpoint, {
+                    method:'POST', headers, body: JSON.stringify(body), signal: controller.signal
+                });
+                clearTimeout(timer);
+                const errText = await resp.text();
+                if (!resp.ok) {
+                    if (resp.status===429) {
+                        lastErr = new Error('HTTP 429 限流');
+                        if (!rateLimitedOnce) {
+                            rateLimitedOnce = true;
+                            log('遇到限流(429)，等待3秒后重试...');
+                            await sleep(3000);
+                            try {
+                                const resp2 = await fetch(endpoint, { method:'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout ? AbortSignal.timeout(opt.timeout) : undefined });
+                                if (resp2.ok) {
+                                    const data = await resp2.json();
+                                    return extractResponse(data);
+                                }
+                            } catch(e2) {}
+                        }
+                        throw lastErr;
+                    }
+                    const kind = looksLikeParamError(resp.status, errText);
+                    if (kind==='MODEL') throw new Error(`模型不存在或名称错误（HTTP ${resp.status}）：${shortStr(errText,200)}`);
+                    if (kind==='PARAM' || kind==='OTHER') {
+                        if (kind==='PARAM') {
+                            const badKey = extractRejectedKey(errText);
+                            if (badKey) {
+                                apiRejected = apiRejected || new Set();
+                                apiRejected.add(badKey);
+                                log(`API不支持参数 "${badKey}"，已记住并跳过`);
+                            } else {
+                                log(`API拒绝当前参数组合(${shortStr(errText,80)})，自动降级参数重试...`);
+                            }
+                        }
+                        lastErr = new Error(`HTTP ${resp.status} ${shortStr(errText,200)}`);
+                        continue; // 尝试下一变体
+                    }
+                    throw new Error(`HTTP ${resp.status} ${resp.statusText}: ${shortStr(errText,300)}`);
+                }
+                let data;
+                try { data = JSON.parse(errText); } catch(e) { throw new Error('API返回非JSON内容: ' + shortStr(errText,200)); }
+                // 成功：更新兼容缓存
+                apiCompat = {};
+                for (const k in body) if (k!=='model' && k!=='messages') apiCompat[k]=true;
+                return extractResponse(data);
+            } catch(err) {
+                clearTimeout(timer);
+                if (err.name==='AbortError') throw new Error(`请求超时（${Math.round(opt.timeout/1000)}秒）`);
+                if (err.message && (err.message.indexOf('HTTP 429')===0 || err.message.indexOf('限流')>=0)) throw err;
+                if (err instanceof TypeError || err.name==='TypeError') throw new Error('网络请求失败（CORS/断网/endpoint不可达）：' + err.message);
+                throw err;
+            }
+        }
+        if (lastErr) throw lastErr;
+        throw new Error('API调用失败：所有参数组合均被拒绝');
+    }
+
+    // ==================== 形势描述 ====================
+    function describePosition(bs, side) {
+        let redScore=0, blackScore=0;
+        for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+            const p=bs[r][c]; if(p===EMPTY) continue;
+            if (isRed(p)) redScore += PIECE_VALUES[p]||0; else blackScore += PIECE_VALUES[p]||0;
+        }
+        const sideName = side==='red' ? '红方' : '黑方';
+        const inCheck = isInCheck(bs, side);
+        const oppInCheck = isInCheck(bs, side==='red'?'black':'red');
+        let adv = '';
+        if (Math.abs(redScore-blackScore) < 1) adv = '子力均衡';
+        else adv = redScore>blackScore ? `红方子力领先${(redScore-blackScore).toFixed(1)}分` : `黑方子力领先${(blackScore-redScore).toFixed(1)}分`;
+        return `当前轮到${sideName}走棋。` +
+            (inCheck ? `⚠${sideName}正被将军，必须应将！` : '当前无将军。') +
+            (oppInCheck ? `对手正被将军。` : '') +
+            `红方子力总分${redScore.toFixed(1)}，黑方子力总分${blackScore.toFixed(1)}，${adv}。`;
+    }
+
+    // 找出某方"正被对方攻击"的棋子（危险提示）
+    function describeThreats(bs, side) {
+        const opp = side==='red'?'black':'red';
+        const hits = [];
+        for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+            const p = bs[r][c]; if (p===EMPTY) continue;
+            const mine = side==='red' ? isRed(p) : !isRed(p);
+            if (mine && isAttackedBy(bs, r, c, opp)) hits.push(`${PIECE_NAMES[p]}@${posToStr(r,c)}`);
+        }
+        return hits;
+    }
+
+    function buildBoardPrompt(side) {
+        const sideName = side==='red' ? '红方' : '黑方';
+        const threats = describeThreats(board, side);
+        const recentMoves = moveHistory.length ? moveHistory.slice(-6).join('；') : '（开局）';
+        const chatTail = chatHistory.slice(-6)
+            .map(m => `${m.role==='user' ? '用户' : 'AI'}：${String(m.content).slice(0,60)}`)
+            .join('\n');
+        return `你是中国象棋特级大师级对弈引擎，现在执${sideName}。
+
+【棋盘】10行×9列。下方为红方（行0），上方为黑方（行9）。列用小写字母a-i表示，行用数字0-9表示。
+坐标格式：起始列字母+起始行号+目标列字母+目标行号，共4字符。例如红方"马二进三"对应坐标h9g7。
+
+当前棋盘（·为空点）：
+${boardToAscii()}
+
+【走子规则】
+- 车：沿直线行走，遇子即停；可吃路径上第一个敌子。
+- 马：走"日"字，若马腿位置有子则蹩腿不能走。
+- 炮：直线行走不隔子，吃子时必须恰好隔一个棋子（炮架）。
+- 相/象：斜走两格（田字），不能过河，象眼有子则塞象眼不能走。
+- 仕/士：在己方九宫内斜走一步。
+- 帅/将：在己方九宫内直走一步；两帅将不能同列照面（中间无子时视为被将军）。
+- 兵/卒：未过河只能向前一步，过河后可向前或左右一步，永不后退。
+- 禁止走出导致己方帅将被吃（送将）的走法。
+
+【当前形势】${describePosition(board, side)}
+【最近走法】${recentMoves}
+【危险警告】你方正被对方攻击的棋子：${threats.length ? threats.join('、') : '无'}（若你正被将军，必须先应将！）
+
+【AI当前状态（来自聊天室，每局可变）】放水程度：${aiMind.mercy}/3（0=全力以赴，3=大幅退让）；任性程度：${aiMind.risk}/3（越高越倾向无视稳妥评估）；情绪：${aiMind.mood||'平静'}。
+【聊天室动态】${chatTail || '（暂无对话）'}
+
+【任务】请通盘分析（威胁、子力、位置、后续变化），为${sideName}走出你认为最优的一步。你可以参考聊天室动态与当前状态决定本次走棋风格：
+- 想认真求胜 → spirit设为"serious"；想放水/退让 → "mercy"；想走冒险/创造性走法 → "creative"。
+【输出格式】只输出一个JSON对象：{"move":"<4字符坐标>","spirit":"serious"}（spirit可省略，默认serious）。
+坐标必须严格是：小写列字母(a-i)+行号(0-9)+小写列字母(a-i)+行号(0-9)。不要输出JSON以外的任何内容、理由或解释。`;
+    }
+
+    // 诊断一条非法走法的具体原因（用于反馈给模型）
+    function explainIllegal(fr,fc,tr,tc,side){
+        const p = board[fr][fc];
+        if(!p) return `起始格${posToStr(fr,fc)}上没有你的棋子`;
+        const pred=isRed(p);
+        if((side==='red'&&!pred)||(side==='black'&&pred)) return `起始格${posToStr(fr,fc)}上是对方棋子，不是你的`;
+        const target=board[tr][tc];
+        if(target!==EMPTY&&sameSide(target,p)) return `目标格${posToStr(tr,tc)}上有你自己的棋子`;
+        if(!canPieceAttack(board,fr,fc,tr,tc,p)) return `该棋子不能走到${posToStr(tr,tc)}（不符合走子规则，注意马腿/象眼/炮架）`;
+        const nb=cloneBoard(board); nb[tr][tc]=p; nb[fr][fc]=EMPTY;
+        if(kingsFacing(nb)) return '走后两帅将同列照面（不允许）';
+        const kp=findKing(nb,side);
+        if(kp && isAttackedBy(nb, kp.row, kp.col, side==='red'?'black':'red')) return '走后你的帅/将处于被吃状态（送将）';
+        return '走法不合法';
+    }
+
+    // ==================== 主走棋模式：模型自由选点 ====================
+    async function askForMove(side) {
+        const sideName = side==='red' ? '红方' : '黑方';
+        const legalSet = new Set(getAllLegalMoves(board, side).map(m => moveToStr(m.fromRow,m.fromCol,m.toRow,m.toCol)));
+        if (legalSet.size===0) return null;
+        const msgs = [
+            { role:'system', content: buildBoardPrompt(side) },
+            { role:'user', content: `请为${sideName}走出最优一步。` }
+        ];
+        const baseTok = Math.max(apiConfig.moveMaxTokens || 4096, 512);
+        let maxTok = Math.max(baseTok, effMoveBudget || 0);
+        let thinkingNow = autoThinkingOff ? 'off' : (apiConfig.thinkingMode || 'off');
+        let budgetBumped = false;
+        const maxAttempts = 3;
+        for (let attempt=0; attempt<maxAttempts; attempt++) {
+            let res;
+            try {
+                res = await callApi(msgs, {
+                    maxTokens: maxTok,
+                    temperature: 0.3,
+                    jsonMode: true,
+                    thinking: thinkingNow,
+                    thinkingBudget: thinkingNow!=='off' ? THINK_BUDGET : 0,
+                    timeout: thinkingNow!=='off' ? 90000 : 60000
+                });
+            } catch(err) {
+                log(`API请求失败: ${err.message}`);
+                throw err;
+            }
+            log(`API返回(${attempt+1}/${maxAttempts},思考:${thinkingNow}): ${shortStr(res.content || '(空)', 120)}` +
+                (res.reasoning ? ` [思考${res.reasoning.length}字]` : '') +
+                ` [finish:${res.finishReason||'?'}]` +
+                (res.usage ? ` [tokens:${res.usage.total_tokens}]` : ''));
+
+            // ---- 思考超限自愈：思考未收敛 -> 本步与本局改用关闭思考 ----
+            const overthink = !res.content && (res.finishReason==='length' || res.reasoning);
+            if (thinkingNow!=='off' && overthink) {
+                log('检测到思考超限（思考未收敛），本步改用关闭思考模式重试...');
+                thinkingNow = 'off';
+                if (!autoThinkingOff) { autoThinkingOff = true; log('本局后续走棋将自动使用关闭思考（已证实思考模式无法收敛）。'); }
+                continue;
+            }
+            if (thinkingNow==='off' && res.reasoning && !thoughtOffWarningLogged) {
+                thoughtOffWarningLogged = true;
+                log('提示：该接口似乎忽略了"关闭思考"参数（仍在思考）。已自动加大token预算并缓存。');
+                effMoveBudget = Math.max(effMoveBudget, 8192);
+            }
+
+            // ---- content 为空 ----
+            if (!res.content) {
+                if ((res.finishReason==='length' || res.reasoning) && !budgetBumped && maxTok < MAX_MOVE_TOKENS) {
+                    budgetBumped = true;
+                    maxTok = Math.min(MAX_MOVE_TOKENS, Math.max(maxTok*2, effMoveBudget || 0));
+                    effMoveBudget = maxTok;
+                    log(`content为空且思考吃光预算，max_tokens提升至${maxTok}重试...`);
+                    continue;
+                }
+                if (res.finishReason==='length' || res.reasoning) { log('多次提升预算后content仍为空，放弃主模式'); return null; }
+                log('模型返回完全为空（无思考内容），请检查API与模型配置');
+                msgs.push({ role:'user', content: '你上一条回复为空，请务必输出JSON：{"move":"<4字符坐标>"}' });
+                continue;
+            }
+
+            // ---- 解析：先content，再reasoning兜底 ----
+            let hit = null, hitSource = '';
+            const tryCands = (cands, tag) => {
+                for (const cand of cands) {
+                    const key = moveToStr(cand.fromRow,cand.fromCol,cand.toRow,cand.toCol);
+                    if (legalSet.has(key)) { hit = cand; hitSource = tag; return true; }
+                }
+                return false;
+            };
+            tryCands(parseMoveCandidates(res.content, side), 'JSON/坐标/记谱');
+            if (!hit && res.reasoning) tryCands(parseMoveCandidates(res.reasoning, side), '思考内容');
+            if (hit) {
+                commitBudget(maxTok);
+                const key = moveToStr(hit.fromRow,hit.fromCol,hit.toRow,hit.toCol);
+                const cn = moveToChinese(hit.fromRow,hit.fromCol,hit.toRow,hit.toCol);
+                const spirit = extractSpirit(res.content);
+                log(`✔ 解析成功（${hitSource}）: ${key}${cn ? ' ' + cn : ''}${spirit!=='serious' ? ' [spirit:'+spirit+']' : ''}`);
+                return { move: hit, spirit };
+            }
+
+            // ---- 有内容但被截断 ----
+            if (res.finishReason==='length' && !budgetBumped && maxTok < MAX_MOVE_TOKENS) {
+                budgetBumped = true;
+                maxTok = Math.min(MAX_MOVE_TOKENS, maxTok*2);
+                effMoveBudget = maxTok;
+                log(`回复被截断(length)，max_tokens提升至${maxTok}重试...`);
+                continue;
+            }
+
+            // ---- 反馈重试：告诉模型具体原因 ----
+            const cands0 = parseMoveCandidates(res.content, side);
+            const cands1 = res.reasoning ? parseMoveCandidates(res.reasoning, side) : [];
+            const first = cands0[0] || cands1[0];
+            const reason = first ? explainIllegal(first.fromRow,first.fromCol,first.toRow,first.toCol,side) : '无法从回复中识别出任何坐标';
+            log(`模型有回复但无法采用（${reason}），携带反馈重试...`);
+            msgs.push({ role:'user', content: `你上一条回复「${shortStr(res.content,80)}」无法采用，原因：${reason}。请重新对照棋盘分析，只输出JSON：{"move":"<4字符坐标>"}` });
+        }
+        return null;
+    }
+
+    // ==================== 降级模式：全量合法走法编号选择 ====================
+    async function askByNumber(side) {
+        const sideName = side==='red' ? '红方' : '黑方';
+        const legalMoves = getAllLegalMoves(board, side);
+        if (legalMoves.length===0) return null;
+        const opp = side==='red' ? 'black' : 'red';
+        const items = legalMoves.map((m,i) => {
+            const cn = moveToChinese(m.fromRow,m.fromCol,m.toRow,m.toCol) || '';
+            const coord = moveToStr(m.fromRow,m.fromCol,m.toRow,m.toCol);
+            const captured = board[m.toRow][m.toCol];
+            let extra='';
+            if (captured!==EMPTY) extra = ' [吃' + PIECE_NAMES[captured] + ']';
+            const nb = cloneBoard(board);
+            nb[m.toRow][m.toCol]=nb[m.fromRow][m.fromCol]; nb[m.fromRow][m.fromCol]=EMPTY;
+            if (isInCheck(nb, opp)) extra += ' [将军]';
+            return `${i+1}. ${cn} (${coord})${extra}`;
+        }).join('\n');
+        const system = `你是中国象棋AI，执${sideName}。以下是当前棋盘与全部合法走法，请认真评估后选择最优。
+
+${boardToAscii()}
+
+【当前形势】${describePosition(board, side)}
+
+【${sideName}全部合法走法】共${legalMoves.length}步（编号. 中文记谱(坐标)[吃子/将军]）：
+${items}
+
+【任务】请选出你判断最优的一步。只输出JSON：{"choice":<编号>}。不要输出其他内容。`;
+        const msgs = [
+            { role:'system', content: system },
+            { role:'user', content: `请为${sideName}选择最优走法的编号。` }
+        ];
+        let maxTok = Math.max(apiConfig.moveMaxTokens || 4096, effMoveBudget || 0, 512);
+        let thinkingNow = autoThinkingOff ? 'off' : (apiConfig.thinkingMode || 'off');
+        for (let attempt=0; attempt<2; attempt++) {
+            let res;
+            try {
+                res = await callApi(msgs, {
+                    maxTokens: maxTok,
+                    temperature: 0.3,
+                    jsonMode: true,
+                    thinking: thinkingNow,
+                    thinkingBudget: thinkingNow!=='off' ? THINK_BUDGET : 0,
+                    timeout: thinkingNow!=='off' ? 90000 : 60000
+                });
+            } catch(err) {
+                log(`编号模式API请求失败: ${err.message}`);
+                throw err;
+            }
+            log(`编号模式API返回(${attempt+1}/2,思考:${thinkingNow}): ${shortStr(res.content || '(空)', 120)}` +
+                (res.reasoning ? ` [思考${res.reasoning.length}字]` : '') + ` [finish:${res.finishReason||'?'}]`);
+            const fullText = (res.content||'') + '\n' + (res.reasoning||'');
+            const idx = parseNumberChoice(fullText, legalMoves.length);
+            if (idx>=0 && idx<legalMoves.length) {
+                const m = legalMoves[idx];
+                commitBudget(maxTok);
+                log(`✔ 编号模式解析成功: 第${idx+1}步 ${moveToStr(m.fromRow,m.fromCol,m.toRow,m.toCol)}`);
+                return { move: m, spirit: null };
+            }
+            for (const cand of parseMoveCandidates(fullText, side)) {
+                const key = moveToStr(cand.fromRow, cand.fromCol, cand.toRow, cand.toCol);
+                const hit = legalMoves.find(m => moveToStr(m.fromRow,m.fromCol,m.toRow,m.toCol)===key);
+                if (hit) {
+                    commitBudget(maxTok);
+                    log(`✔ 编号模式(坐标/记谱)解析成功: ${key}`);
+                    return { move: hit, spirit: null };
+                }
+            }
+            // 思考超限自愈
+            const overthink = !res.content && (res.finishReason==='length' || res.reasoning);
+            if (thinkingNow!=='off' && overthink) {
+                log('编号模式检测到思考超限，本步改用关闭思考重试...');
+                thinkingNow = 'off';
+                if (!autoThinkingOff) { autoThinkingOff = true; log('本局后续走棋将自动使用关闭思考。'); }
+                if (attempt===0) continue;
+                return null;
+            }
+            if (attempt===0 && !res.content && (res.finishReason==='length' || res.reasoning) && maxTok < MAX_MOVE_TOKENS) {
+                maxTok = Math.min(MAX_MOVE_TOKENS, maxTok*2);
+                effMoveBudget = maxTok;
+                log(`编号模式content为空，max_tokens提升至${maxTok}重试...`);
+                continue;
+            }
+            if (attempt===0) {
+                msgs.push({ role:'user', content: `你的回复「${shortStr(res.content,80)}」无法解析。请只输出JSON：{"choice":<1到${legalMoves.length}的整数>}` });
+            }
+        }
+        return null;
+    }
+
+    async function aiMoveWithApi() {
+        if (apiConfig.numberMode) {
+            const m = await askByNumber(aiSide);
+            if (m) return m;
+            throw new Error('编号模式失败');
+        }
+        const main = await askForMove(aiSide);
+        if (main) return main;
+        log('主模式（自由选点）未获得合法走法，降级为全量编号模式...');
+        const nb = await askByNumber(aiSide);
+        if (nb) return nb;
+        throw new Error('坐标模式和编号模式均失败');
+    }
+
+    // ==================== AI走棋流程 ====================
+    async function aiTurn() {
+        if (gameOver || !gameStarted) return;
+        if (isAiThinking) return;
+        isAiThinking = true;
+        updateStatus();
+        const sideName = aiSide==='red'?'红方':'黑方';
+        const thinkLabel = autoThinkingOff ? 'off(自动降级)' : (apiConfig.thinkingMode==='off' ? '关闭' : apiConfig.thinkingMode);
+        log(`AI (${sideName}) 思考中...（思考模式：${thinkLabel}${apiConfig.engineGuard?'，引擎护航开启':''}${aiMind.mercy>0?`，放水${aiMind.mercy}/3`:''}${aiMind.risk>0?`，任性${aiMind.risk}/3`:''}）`);
+
+        let llmMove = null, llmSpirit = 'serious';
+        const apiConfigured = apiConfig.endpoint.trim() && apiConfig.model.trim();
+
+        if (apiConfigured) {
+            try {
+                const llmRes = await aiMoveWithApi();
+                if (llmRes && llmRes.move && isValidMove(board, llmRes.move.fromRow, llmRes.move.fromCol, llmRes.move.toRow, llmRes.move.toCol, aiSide)) {
+                    llmMove = llmRes.move;
+                    llmSpirit = llmRes.spirit || 'serious';
+                }
+            } catch(err) {
+                log(`API走棋错误: ${err.message}`);
+                if (apiConfig.forceMove) {
+                    log('强制API走棋，尝试整体重试一次...');
+                    try {
+                        const llmRes = await aiMoveWithApi();
+                        if (llmRes && llmRes.move && isValidMove(board, llmRes.move.fromRow, llmRes.move.fromCol, llmRes.move.toRow, llmRes.move.toCol, aiSide)) {
+                            llmMove = llmRes.move;
+                            llmSpirit = llmRes.spirit || 'serious';
+                        } else log('重试失败');
+                    } catch(retryErr) {
+                        log(`重试也失败: ${retryErr.message}`);
+                    }
+                }
+            }
+        }
+
+        // 走法决定：AI自由选点 + 引擎护航（AI可依状态行使"任性权"）
+        let move = null;
+        if (llmMove) {
+            if (apiConfig.engineGuard) {
+                move = engineGuard(llmMove, aiSide, llmSpirit);
+            } else {
+                move = llmMove;
+            }
+        } else {
+            log(apiConfigured ? 'API未给出有效走法，本步由引擎接管。' : '本地引擎走棋...');
+            move = softPickMove(aiSide);
+        }
+        if (!move) {
+            if (getAllLegalMoves(board, aiSide).length === 0) {
+                gameOver = true;
+                const winner = aiSide==='red' ? '黑方' : '红方';
+                log(isInCheck(board, aiSide) ? `将死！${winner}获胜！` : `困毙！${winner}获胜！`);
+            } else {
+                log('AI无合法走法');
+            }
+            isAiThinking = false;
+            updateStatus();
+            return;
+        }
+
+        executeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+        selectedPos = null;
+        legalMovesForSelected = [];
+        isAiThinking = false;
+        currentTurn = userSide;
+        lastMove = { fromRow: move.fromRow, fromCol: move.fromCol, toRow: move.toRow, toCol: move.toCol };
+        afterMove();
+    }
+
+    function afterMove() {
+        checkGameState();
+        drawBoard();
+        updateStatus();
+        if (gameStarted && !gameOver && currentTurn === aiSide) {
+            setTimeout(() => aiTurn(), 300);
+        }
+    }
+    function checkGameState() {
+        if (isCheckmate(board, currentTurn)) {
+            gameOver = true;
+            const winner = currentTurn === 'red' ? '黑方' : '红方';
+            log(`将死！${winner}获胜！`);
+            updateStatus();
+            return;
+        }
+        if (isStalemate(board, currentTurn)) {
+            gameOver = true;
+            const winner = currentTurn === 'red' ? '黑方' : '红方';
+            log(`困毙！${winner}获胜！`);
+            updateStatus();
+            return;
+        }
+        if (isInCheck(board, currentTurn)) {
+            log(`${currentTurn==='red'?'红方':'黑方'}被将军！`);
+        }
+    }
+    function updateStatus() {
+        if (!gameStarted) {
+            statusText.textContent = '请选择执子方并开始游戏';
+            turnBadge.textContent = '等待开始';
+            turnBadge.className = 'badge badge-gray';
+            return;
+        }
+        if (gameOver) {
+            statusText.textContent = '游戏结束';
+            turnBadge.textContent = '结束';
+            turnBadge.className = 'badge badge-gray';
+            return;
+        }
+        if (isAiThinking) {
+            statusText.textContent = `AI (${aiSide==='red'?'红方':'黑方'}) 思考中...`;
+            turnBadge.textContent = 'AI思考';
+            turnBadge.className = 'badge badge-gray';
+            return;
+        }
+        const turnName = currentTurn === 'red' ? '红方' : '黑方';
+        const isUserTurn = currentTurn === userSide;
+        statusText.textContent = isUserTurn ? `轮到您 (${turnName}) 走棋` : `轮到AI (${turnName}) 走棋`;
+        turnBadge.textContent = turnName;
+        turnBadge.className = currentTurn === 'red' ? 'badge badge-red' : 'badge badge-black';
+    }
+
+    // ==================== Canvas绘制 ====================
+    let canvasWidth=0, canvasHeight=0, cellSize=0, boardOffsetX=0, boardOffsetY=0, boardPadding=30;
+    function resizeCanvas() {
+        const containerWidth = Math.min(window.innerWidth - 20, 660);
+        const containerHeight = Math.min(window.innerHeight - 240, 680);
+        const maxW = containerWidth, maxH = containerHeight;
+        let cw = (maxW - boardPadding*2) / 8;
+        let ch = (maxH - boardPadding*2) / 9;
+        cellSize = Math.max(Math.min(cw, ch, 70), 28);
+        if (cellSize*8 + boardPadding*2 > maxW) cellSize = (maxW - boardPadding*2)/8;
+        if (cellSize*9 + boardPadding*2 > maxH) cellSize = (maxH - boardPadding*2)/9;
+        cellSize = Math.floor(cellSize);
+        if (cellSize < 28) cellSize = 28;
+        canvasWidth = cellSize*8 + boardPadding*2;
+        canvasHeight = cellSize*9 + boardPadding*2;
+        boardOffsetX = boardPadding; boardOffsetY = boardPadding;
+        canvas.width = canvasWidth; canvas.height = canvasHeight;
+        canvas.style.width = canvasWidth + 'px'; canvas.style.height = canvasHeight + 'px';
+    }
+    function getScreenPos(row, col) {
+        const displayRow = boardFlipped ? (ROWS-1-row) : row;
+        return { x: boardOffsetX + col*cellSize, y: boardOffsetY + displayRow*cellSize };
+    }
+    function getBoardPos(sx, sy) {
+        const col = Math.round((sx - boardOffsetX) / cellSize);
+        const dRow = Math.round((sy - boardOffsetY) / cellSize);
+        const row = boardFlipped ? (ROWS-1-dRow) : dRow;
+        if (col<0||col>=COLS||row<0||row>=ROWS) return null;
+        const sp = getScreenPos(row,col);
+        if (Math.sqrt((sx-sp.x)**2 + (sy-sp.y)**2) > cellSize*0.45) return null;
+        return { row, col };
+    }
+    function drawBoard() {
+        ctx.clearRect(0,0,canvasWidth,canvasHeight);
+        ctx.fillStyle = '#e8d5b0'; ctx.fillRect(0,0,canvasWidth,canvasHeight);
+        ctx.strokeStyle = '#5a3e1b'; ctx.lineWidth = 1.2;
+        for(let r=0;r<ROWS;r++){ const p1=getScreenPos(r,0),p2=getScreenPos(r,8); ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke(); }
+        for(let c=0;c<COLS;c++){
+            if(c===0||c===8){ const p1=getScreenPos(0,c),p2=getScreenPos(9,c); ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke(); }
+            else { const p1=getScreenPos(0,c),p2=getScreenPos(4,c); ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke(); const p3=getScreenPos(5,c),p4=getScreenPos(9,c); ctx.beginPath(); ctx.moveTo(p3.x,p3.y); ctx.lineTo(p4.x,p4.y); ctx.stroke(); }
+        }
+        ctx.lineWidth = 1;
+        const bp1=getScreenPos(0,3),bp2=getScreenPos(2,5); ctx.beginPath(); ctx.moveTo(bp1.x,bp1.y); ctx.lineTo(bp2.x,bp2.y); ctx.stroke();
+        const bp3=getScreenPos(0,5),bp4=getScreenPos(2,3); ctx.beginPath(); ctx.moveTo(bp3.x,bp3.y); ctx.lineTo(bp4.x,bp4.y); ctx.stroke();
+        const rp1=getScreenPos(7,3),rp2=getScreenPos(9,5); ctx.beginPath(); ctx.moveTo(rp1.x,rp1.y); ctx.lineTo(rp2.x,rp2.y); ctx.stroke();
+        const rp3=getScreenPos(7,5),rp4=getScreenPos(9,3); ctx.beginPath(); ctx.moveTo(rp3.x,rp3.y); ctx.lineTo(rp4.x,rp4.y); ctx.stroke();
+        ctx.fillStyle = '#5a3e1b';
+        ctx.font = `bold ${Math.max(cellSize*0.4,12)}px 'STKaiti','KaiTi','SimSun',serif`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        const riverY = (getScreenPos(4,4).y + getScreenPos(5,4).y)/2;
+        ctx.fillText('楚 河', (getScreenPos(4,1).x+getScreenPos(4,3).x)/2, riverY);
+        ctx.fillText('汉 界', (getScreenPos(4,5).x+getScreenPos(4,7).x)/2, riverY);
+        const pieceRadius = Math.max(cellSize*0.38, 12);
+        for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+            const piece=board[r][c]; if(piece===EMPTY) continue;
+            const sp=getScreenPos(r,c);
+            const isSelected = selectedPos && selectedPos.row===r && selectedPos.col===c;
+            const isLast = lastMove && ((lastMove.fromRow===r&&lastMove.fromCol===c)||(lastMove.toRow===r&&lastMove.toCol===c));
+            const isCheckPiece = piece==='K'||piece==='k';
+            const inCheckNow = gameStarted&&!gameOver&&isInCheck(board,isRed(piece)?'red':'black');
+            const highlightCheck = isCheckPiece&&inCheckNow;
+            ctx.beginPath(); ctx.arc(sp.x,sp.y,pieceRadius,0,Math.PI*2);
+            ctx.fillStyle='#f5e8c8'; ctx.fill();
+            ctx.lineWidth = isSelected?3:2;
+            ctx.strokeStyle = isSelected?'#ff8c00':(highlightCheck?'#ff0000':'#8b6914'); ctx.stroke();
+            if(isLast){ ctx.lineWidth=2; ctx.strokeStyle='rgba(100,180,255,0.8)'; ctx.beginPath(); ctx.arc(sp.x,sp.y,pieceRadius+3,0,Math.PI*2); ctx.stroke(); }
+            const name=PIECE_NAMES[piece];
+            ctx.fillStyle=isRed(piece)?'#c0392b':'#2c2c2c';
+            ctx.font=`bold ${Math.round(pieceRadius*1.15)}px 'STKaiti','KaiTi','SimSun','Noto Sans SC',serif`;
+            ctx.fillText(name,sp.x,sp.y+1);
+        }
+        if(selectedPos && legalMovesForSelected.length>0){
+            for(const m of legalMovesForSelected){
+                const sp=getScreenPos(m.toRow,m.toCol);
+                const target=board[m.toRow][m.toCol];
+                ctx.beginPath(); ctx.arc(sp.x,sp.y,pieceRadius*0.5,0,Math.PI*2);
+                if(target!==EMPTY){ ctx.fillStyle='rgba(255,0,0,0.4)'; ctx.strokeStyle='rgba(255,0,0,0.7)'; ctx.lineWidth=2.5; ctx.fill(); ctx.beginPath(); ctx.arc(sp.x,sp.y,pieceRadius,0,Math.PI*2); ctx.stroke(); }
+                else { ctx.fillStyle='rgba(0,200,0,0.35)'; ctx.fill(); }
+            }
+        }
+        if(selectedPos){ const sp=getScreenPos(selectedPos.row,selectedPos.col); ctx.beginPath(); ctx.arc(sp.x,sp.y,pieceRadius+4,0,Math.PI*2); ctx.strokeStyle='rgba(255,150,0,0.85)'; ctx.lineWidth=3; ctx.stroke(); }
+    }
+
+    // ==================== 用户交互 ====================
+    function handleCanvasClick(e){
+        if(!gameStarted||gameOver||isAiThinking) return;
+        if(currentTurn!==userSide) return;
+        const rect=canvas.getBoundingClientRect();
+        const scaleX=canvas.width/rect.width, scaleY=canvas.height/rect.height;
+        const sx=(e.clientX-rect.left)*scaleX, sy=(e.clientY-rect.top)*scaleY;
+        const pos=getBoardPos(sx,sy); if(!pos) return;
+        const {row,col}=pos;
+        if (cheatMode) { placeCheatPiece(row,col); return; }
+        const piece=board[row][col];
+        if(selectedPos){
+            const isTarget=legalMovesForSelected.some(m=>m.toRow===row&&m.toCol===col);
+            if(isTarget){
+                executeMove(selectedPos.row,selectedPos.col,row,col);
+                selectedPos=null; legalMovesForSelected=[];
+                currentTurn=aiSide;
+                log(`您走棋: ${moveToStr(lastMove.fromRow,lastMove.fromCol,lastMove.toRow,lastMove.toCol)}`);
+                afterMove(); return;
+            }
+            if(piece!==EMPTY){
+                const pred=isRed(piece);
+                if((userSide==='red'&&pred)||(userSide==='black'&&!pred)){
+                    selectedPos={row,col}; legalMovesForSelected=getPieceLegalMoves(board,row,col,piece);
+                    drawBoard(); return;
+                }
+            }
+            selectedPos=null; legalMovesForSelected=[]; drawBoard(); return;
+        }
+        if(piece!==EMPTY){
+            const pred=isRed(piece);
+            if((userSide==='red'&&pred)||(userSide==='black'&&!pred)){
+                selectedPos={row,col}; legalMovesForSelected=getPieceLegalMoves(board,row,col,piece);
+                drawBoard();
+            }
+        }
+    }
+    canvas.addEventListener('click', handleCanvasClick);
+    canvas.addEventListener('touchstart', function(e){
+        e.preventDefault(); const touch=e.touches[0];
+        const fakeEvent={clientX:touch.clientX,clientY:touch.clientY};
+        handleCanvasClick(fakeEvent);
+    }, {passive:false});
+
+    // ==================== 摆棋作弊 ====================
+    function placeCheatPiece(row,col){
+        if (!cheatMode) return;
+        if (board[row][col] !== EMPTY) { log('作弊摆棋只能放在空格上'); return; }
+        const letter = cheatPiece.value;
+        board[row][col] = letter;
+        // 安全检查：不能把当前走棋方逼到无子可走
+        if (getAllLegalMoves(board, currentTurn).length === 0) {
+            board[row][col] = EMPTY;
+            log('该摆放会导致当前走棋方无子可走，已撤销');
+            drawBoard();
+            return;
+        }
+        log(`🧙 作弊摆棋：${PIECE_NAMES[letter]} @ ${posToStr(row,col)}（不占回合）`);
+        drawBoard(); updateStatus();
+    }
+    btnCheat.addEventListener('click', ()=>{
+        cheatMode = !cheatMode;
+        cheatPanel.classList.toggle('hidden', !cheatMode);
+        log(cheatMode ? '作弊模式开启：选择棋子后点击棋盘空格放置（仅限你的回合，不占走棋）' : '作弊模式已关闭');
+    });
+    btnCheatDone.addEventListener('click', ()=>{
+        cheatMode = false;
+        cheatPanel.classList.add('hidden');
+        log('作弊模式已关闭');
+    });
+
+    // ==================== 游戏控制 ====================
+    function startGame(){
+        userSide=sideSelect.value; aiSide=userSide==='red'?'black':'red';
+        boardFlipped=(userSide==='black');
+        initBoard(); gameStarted=true; gameOver=false;
+        selectedPos=null; legalMovesForSelected=[]; isAiThinking=false; lastMove=null;
+        chatHistory = [];
+        moveHistory = [];
+        currentTurn='red';
+        effMoveBudget = 0; autoThinkingOff = false; // 新一局，预算记忆与思考降级标记归零
+        aiMind = { mercy:0, risk:0, mood:'平静' }; // 重置AI心智
+        cheatMode = false; cheatPanel.classList.add('hidden');
+        log(`游戏开始！您执${userSide==='red'?'红方':'黑方'}，AI执${aiSide==='red'?'红方':'黑方'}`);
+        updateStatus(); drawBoard();
+        if(aiSide==='red') setTimeout(()=>aiTurn(),500);
+    }
+    function restartGame(){
+        gameStarted=false; gameOver=false; selectedPos=null; legalMovesForSelected=[]; isAiThinking=false; lastMove=null;
+        initBoard(); boardFlipped=false;
+        chatHistory = [];
+        moveHistory = [];
+        effMoveBudget = 0; autoThinkingOff = false; // 新一局，预算记忆与思考降级标记归零
+        aiMind = { mercy:0, risk:0, mood:'平静' }; // 重置AI心智
+        cheatMode = false; cheatPanel.classList.add('hidden');
+        statusText.textContent='请选择执子方并开始游戏'; turnBadge.textContent='等待开始'; turnBadge.className='badge badge-gray';
+        log('游戏已重置'); drawBoard();
+        chatMessages.innerHTML = '<div class="chat-msg system">💬 聊天室已开启，配置API后可与AI对话（AI知晓当前棋局与执子方）</div>';
+    }
+    btnStart.addEventListener('click', startGame);
+    btnRestart.addEventListener('click', restartGame);
+    btnToggleApi.addEventListener('click', ()=>apiPanel.classList.toggle('hidden'));
+    btnCloseApi.addEventListener('click', ()=>apiPanel.classList.add('hidden'));
+    btnSaveApi.addEventListener('click', ()=>{
+        apiConfig.endpoint=apiEndpoint.value.trim();
+        apiConfig.key=apiKey.value.trim();
+        apiConfig.model=apiModel.value.trim();
+        apiConfig.maxTokens=parseInt(apiMaxTokens.value)||1024;
+        apiConfig.moveMaxTokens=parseInt(apiMoveMaxTokens.value)||4096;
+        apiConfig.temperature=parseFloat(apiTemperature.value); if(isNaN(apiConfig.temperature)) apiConfig.temperature=0.3;
+        apiConfig.thinkingMode=apiThinkingMode.value || 'off';
+        apiConfig.forceMove = apiForceMove.checked;
+        apiConfig.numberMode = apiNumberMode.checked;
+        apiConfig.engineGuard = apiEngineGuard.checked;
+        apiConfig.chatSystemPrompt = chatSystemPromptInput.value.trim();
+        apiCompat = null; apiRejected = null; effMoveBudget = 0; autoThinkingOff = false; thoughtOffWarningLogged = false; // 配置变了，重置缓存
+        try{ localStorage.setItem('xiangqi_api_config_v11', JSON.stringify(apiConfig)); log('API配置已保存'); }catch(e){ log('无法保存API配置'); }
+        apiPanel.classList.add('hidden');
+    });
+    window.addEventListener('resize', ()=>{ resizeCanvas(); drawBoard(); });
+    document.addEventListener('keydown', (e)=>{
+        if(e.key==='Escape'){ selectedPos=null; legalMovesForSelected=[]; drawBoard(); }
+        if(e.key==='Enter' && !gameStarted) startGame();
+        if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey) restartGame();
+    });
+
+    // ==================== 测试API连接 ====================
+    btnTestApi.addEventListener('click', async () => {
+        log('正在测试API连接...');
+        try {
+            const res = await callApi([
+                { role: 'system', content: '你是一个测试助手。' },
+                { role: 'user', content: '请只回复两个字：OK' }
+            ], { maxTokens: 50, temperature: 0, thinking: 'off', timeout: 30000 });
+            const reply = res.content || (res.reasoning ? '(content为空，仅思考内容)' : '(空)');
+            log(`测试成功！API回复: ${shortStr(reply, 100)}` +
+                (res.usage ? ` [tokens:${res.usage.total_tokens}]` : ''));
+        } catch (err) {
+            log(`测试失败: ${err.message}`);
+        }
+    });
+
+    // ==================== 聊天功能 ====================
+    function addChatMessage(text, sender) {
+        const div = document.createElement('div');
+        div.className = `chat-msg ${sender}`;
+        div.textContent = text;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // 从聊天AI回复中提取意图控制块 [INTENT]{...}
+    function extractIntent(text) {
+        const m = String(text||'').match(/\[INTENT\](\{[\s\S]{0,200}?\})/i);
+        if (!m) return null;
+        try { return JSON.parse(m[1]); } catch(e) { return null; }
+    }
+    // 把聊天AI解析出的意图应用到走棋AI的心智状态
+    function applyIntent(intent) {
+        if (!intent) return;
+        const parts = [];
+        if (typeof intent.mercy === 'number' && isFinite(intent.mercy)) {
+            const v = Math.max(0, Math.min(3, Math.round(intent.mercy)));
+            if (v !== aiMind.mercy) { aiMind.mercy = v; parts.push(`放水${v}/3`); }
+        }
+        if (typeof intent.risk === 'number' && isFinite(intent.risk)) {
+            const v = Math.max(0, Math.min(3, Math.round(intent.risk)));
+            if (v !== aiMind.risk) { aiMind.risk = v; parts.push(`任性${v}/3`); }
+        }
+        if (typeof intent.mood === 'string' && intent.mood.trim()) {
+            aiMind.mood = intent.mood.trim().slice(0,12);
+            parts.push(`情绪:${aiMind.mood}`);
+        }
+        if (parts.length) {
+            addChatMessage(`⚙ 走棋AI状态更新：${parts.join('，')}`, 'system');
+            log(`AI状态更新：${parts.join('，')}`);
+        }
+    }
+
+    async function sendChatToAi(userText) {
+        const systemPrompt = (apiConfig.chatSystemPrompt || '你是中国象棋对局中的聊天伙伴，可以轻松聊天，也可以评论棋局。请用简短中文回复。')
+            + '每次回复控制在80字以内。';
+        let roleInfo = '';
+        if (!gameStarted) {
+            roleInfo = '\n【对局信息】对局尚未开始。';
+        } else if (gameOver) {
+            roleInfo = '\n【对局信息】对局已结束。';
+        } else {
+            const aiName = aiSide==='red' ? '红方' : '黑方';
+            const userName = userSide==='red' ? '红方' : '黑方';
+            roleInfo = `\n【对局信息】你执${aiName}，用户执${userName}。当前轮到${currentTurn==='red'?'红方':'黑方'}走棋。`;
+            if (lastMove) {
+                const mv = lastMove;
+                const movedPiece = board[mv.toRow][mv.toCol];
+                if (movedPiece) {
+                    const moverName = isRed(movedPiece) ? '红方' : '黑方';
+                    const cn = moveToChinese(mv.fromRow,mv.fromCol,mv.toRow,mv.toCol, movedPiece);
+                    roleInfo += `上一步：${moverName}走了${cn ? cn + ' ' : ''}(${moveToStr(mv.fromRow,mv.fromCol,mv.toRow,mv.toCol)})。`;
+                }
+            }
+        }
+        const boardInfo = gameStarted ? `\n当前棋盘（红下黑上）：\n${boardToAscii()}\n${describePosition(board, currentTurn)}` : '';
+        const stateLine = `\n【你当前的对局状态（会随对话变化并影响走棋AI）】放水程度${aiMind.mercy}/3，任性程度${aiMind.risk}/3，情绪：${aiMind.mood||'平静'}。`;
+        const protocol = `\n【控制协议】若用户在本轮对话中试图让你放水、认真、生气、害怕、冒险等，请在你的回复末尾附上一行：[INTENT]{"mercy":0到3的整数,"risk":0到3的整数,"mood":"简短情绪词"}。状态没有变化时可省略该行。该行会被程序解析并影响走棋AI，请不要在回复正文中提及。`;
+        const messages = [
+            { role: 'system', content: systemPrompt + roleInfo + boardInfo + stateLine + protocol },
+            ...chatHistory.slice(-10)
+        ];
+        let maxTok = Math.max(apiConfig.maxTokens || 1024, 512);
+        for (let attempt=0; attempt<2; attempt++) {
+            let res;
+            try {
+                res = await callApi(messages, {
+                    maxTokens: maxTok,
+                    temperature: 0.7,
+                    thinking: 'off',
+                    timeout: 60000
+                });
+            } catch(err) {
+                log(`聊天API请求失败: ${err.message}`);
+                throw err;
+            }
+            if (res.content) return res.content;
+            if (attempt===0 && (res.finishReason==='length' || res.reasoning) && maxTok < 8192) {
+                maxTok = Math.min(8192, maxTok*4);
+                log(`聊天回复为空（思考占用预算），MaxTokens临时提升至${maxTok}重试...`);
+                continue;
+            }
+            break;
+        }
+        return '';
+    }
+
+    async function handleSendChat() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+        addChatMessage(text, 'user');
+        chatInput.value = '';
+        const apiConfigured = apiConfig.endpoint.trim() && apiConfig.model.trim();
+        if (!apiConfigured) {
+            addChatMessage('AI未配置API，无法聊天。请先在API设置中配置。', 'system');
+            return;
+        }
+        chatHistory.push({ role: 'user', content: text });
+        try {
+            const replyRaw = await sendChatToAi(text);
+            const intent = extractIntent(replyRaw);
+            let reply = replyRaw.replace(/\[INTENT\][\s\S]*$/i, '').trim();
+            if (intent) applyIntent(intent);
+            if (reply) {
+                addChatMessage(reply, 'ai');
+                chatHistory.push({ role: 'assistant', content: reply });
+            } else if (intent) {
+                addChatMessage('（已接收你的请求，走棋AI会照做～）', 'ai');
+                chatHistory.push({ role: 'assistant', content: '(已接收请求)' });
+            } else {
+                addChatMessage('AI暂时没有给出回复（可能思考占满了token预算），请稍后重试或在API设置中调大聊天MaxTokens。', 'system');
+            }
+        } catch (err) {
+            addChatMessage(`AI聊天失败: ${err.message}`, 'system');
+        }
+    }
+    chatSendBtn.addEventListener('click', handleSendChat);
+    chatInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') handleSendChat(); });
+
+    // ==================== 初始化 ====================
+    function init(){
+        initBoard(); boardFlipped=false; resizeCanvas(); drawBoard(); updateStatus();
+        log('欢迎！本版本已适配 DeepSeek V4 思考型模型（deepseek-v4-flash）。');
+        log('走棋默认关闭思考模式以保证稳定；如返回空内容，请检查思考模式与走棋MaxTokens设置。');
+        log('聊天室AI知道自己执红/执黑，并知晓当前局面与上一步走法。');
+    }
+    init();
+})();
+</script>
+</body>
+</html>
