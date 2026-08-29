@@ -1,0 +1,6 @@
+# ============ 本地密钥 / 配置（绝不提交到 Git） ============
+# CLI 持久化的 API 配置（含 DeepSeek API Key）
+web/Chess/tools/.xq_localstore.json
+web/Chess/tools/.xq_key
+*.xq_localstore.json
+*.xq_key
